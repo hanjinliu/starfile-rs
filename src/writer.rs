@@ -13,5 +13,5 @@ impl StarWriter {
     pub fn new(path: &Path) -> io::Result<Self> {
         let writer = File::create(path)?;
         Ok(StarWriter {writer: io::BufWriter::new(writer)})
-    }   
+    }
 }

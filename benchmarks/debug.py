@@ -33,7 +33,7 @@ def random_access(num=100):
     time_to_polars = TimeRecords()
     for i in range(num):
         with time_parse:
-            block = starfile_rs.read(path)["TS_43/6682"]
+            block = starfile_rs.read_star(path)["TS_43/6682"]
         with time_to_pandas:
             df_pandas = block.as_loop().to_pandas()
         with time_to_polars:

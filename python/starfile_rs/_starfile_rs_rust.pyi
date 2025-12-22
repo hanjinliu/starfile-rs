@@ -1,9 +1,11 @@
 class StarReader:
+    """Rust implementation of a STAR file reader."""
     def __init__(self, path: str) -> None: ...
     def next_block(self) -> DataBlock | None: ...
     def close(self) -> None: ...
 
 class DataBlock:
+    """Rust implementation of a STAR file data block."""
     @staticmethod
     def construct_single_block(
         name: str,

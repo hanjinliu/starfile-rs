@@ -32,13 +32,16 @@ impl StarReader {
         }
     }
 
+    // TODO: implement chunked reading
+    // pub fn next_block_chunk(&mut self, n: usize) -> PyResult<Vec<DataBlock>> {}
+
     pub fn close(&mut self) {
         // Explicitly drop the iterator to close the file
         self.iter = None;
     }
 }
 
-
+/// An iterator over STAR data blocks that read entire block at a time
 pub struct StarBufIter<R: io::BufRead> {
     reader: R,
     buf: String,
