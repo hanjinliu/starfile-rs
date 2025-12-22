@@ -1,0 +1,28 @@
+[build-system]
+requires = ["maturin>=1.10,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "starfile-rs"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+]
+dynamic = ["version"]
+[project.optional-dependencies]
+tests = [
+    "pytest",
+]
+pandas = [
+    "pandas>=2.0.0",
+]
+polars = [
+    "polars>=1.35.2",
+]
+[tool.maturin]
+python-source = "python"
+features = ["pyo3/extension-module"]
+module-name = "starfile_rs._starfile_rs_rust"
+bindings = "pyo3"
