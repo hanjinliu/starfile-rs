@@ -1,5 +1,5 @@
 /target
-benchmarks/make_figures.py
+benchmarks/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

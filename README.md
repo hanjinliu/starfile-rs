@@ -5,7 +5,23 @@ A blazing-fast and type-safe STAR file reader (and writer - to be implemented) p
 ```python
 from starfile_rs import read_star
 
-read_star("path/to/file.star")  # read as a dict of data blocks
+read_star("path/to/file.star")  # read as a dict-like object of data blocks
+```
+
+## Installation
+
+```bash
+pip install starfile-rs[pandas]  # for pandas support
+pip install starfile-rs[polars]  # for polars support
+```
+
+or clone this repository and install locally (requires Rust):
+
+```bash
+git clone https://github.com/hanjinliu/starfile-rs.git
+cd starfile-rs
+pip install -e .[pandas]  # for pandas support
+pip install -e .[polars]  # for polars support
 ```
 
 ## Highlights
@@ -35,7 +51,7 @@ from starfile_rs import read_star
 
 path = "path/to/file.star"
 
-star = read_star(path)  # -> Safe, if the file is not broken
+star = read_star(path)  # Safe, unless the file is broken
 star["general"]  # Unsafe, if the block does not exist
 
 if block := star.get("general"):  # Safe
