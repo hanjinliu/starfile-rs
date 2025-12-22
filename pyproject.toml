@@ -12,7 +12,7 @@ classifiers = [
 ]
 dynamic = ["version"]
 [project.optional-dependencies]
-tests = [
+testing = [
     "pytest",
     "starfile-rs[pandas]",
     "starfile-rs[polars]",
