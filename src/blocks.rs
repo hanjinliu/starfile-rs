@@ -104,6 +104,21 @@ impl DataBlock {
         }
     }
 
+    pub fn loop_content_with_sep(&self, sep: &str) -> PyResult<String> {
+        match &self.block_type {
+            BlockData::Loop(loop_data) => {
+                let lines = loop_data.content
+                    .lines()
+                    .map(|line| line.split_whitespace().collect::<Vec<&str>>().join(sep))
+                    .collect::<Vec<String>>();
+                Ok(lines.join("\n"))
+            }
+            _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "Not a loop data block",
+            )),
+        }
+    }
+
     pub fn loop_nrows(&self) -> PyResult<usize> {
         match &self.block_type {
             BlockData::Loop(loop_data) => {

@@ -7,14 +7,8 @@ Random access to a data block located at an unknown position in a 15 MB STAR fil
 
 ![](images/time-random-access.png)
 
-39 s &rarr; 0.14 s !!
-
-
-
 #### Reading large blocks
 
 Random access to a 12 MB data block (The "particles" block from `"Refine3D/bin6/run_it000_data.star"`)
 
 ![](images/time-large-block.png)
-
-12 MB

@@ -82,7 +82,7 @@ impl<R: BufRead> Iterator for StarBufIter<R> {
                             Err(e) => return Some(Err(e)),
                         }
                     } else {
-                        
+
                     }
                 }
                 Err(e) => return Some(Err(e)),
@@ -123,7 +123,7 @@ fn parse_block<R: io::BufRead>(mut reader: &mut R) -> io::Result<BlockData> {
 
 
 /// Parse a simple data block from the reader
-/// 
+///
 /// A simple data block consists of lines starting with '_' as follows:
 /// _column_1 value_1
 /// _column_2 value_2
@@ -155,10 +155,10 @@ fn parse_simple_block<R: io::BufRead>(reader: &mut R) -> io::Result<Vec<Scalar>>
 
 fn parse_loop_block<R: io::BufRead>(reader: &mut R) -> io::Result<LoopData> {
     let mut column_names = Vec::<String>::new();
-    
+
     // Parse column names
     let mut nrows = 0;
-    let mut content = loop {
+    let mut last_line = loop {
         let mut buf = String::new();
         match reader.read_line(&mut buf) {
             Ok(0) => {
@@ -188,14 +188,14 @@ fn parse_loop_block<R: io::BufRead>(reader: &mut R) -> io::Result<LoopData> {
                 if buf.trim_end().is_empty() {
                     break; // End of block
                 } else {
-                    content.push_str(&buf);
+                    last_line.push_str(&buf);
                     nrows += 1;
                 }
             }
             Err(e) => return Err(e),
         }
     }
-    Ok(LoopData::new(column_names, content, nrows))
+    Ok(LoopData::new(column_names, last_line, nrows))
 }
 
 fn remove_comment(line: &str) -> &str {
