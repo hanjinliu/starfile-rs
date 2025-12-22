@@ -1,4 +1,4 @@
-from typing import Iterable, Iterator, Mapping, SupportsIndex, TYPE_CHECKING
+from typing import Iterable, Iterator, Mapping, TYPE_CHECKING
 from starfile_rs.io import StarReader
 from starfile_rs.components import DataBlock
 
@@ -41,22 +41,27 @@ class StarDict(Mapping[str, "DataBlock"]):
         names = [block.name for block in blocks]
         return cls(block_dict, names)
 
+    def nth(self, index: int) -> "DataBlock":
+        """Return the n-th data block in the STAR file."""
+        return self[self._names[index]]
+
     def first(self) -> "DataBlock":
         """Return the first data block in the STAR file."""
-        if first := self.try_first():
-            return first
-        raise ValueError("The STAR file is empty.")
+        return self.nth(0)
+
+    def try_nth(self, index: int) -> "DataBlock | None":
+        """Try to return the n-th data block in the STAR file, return None if out of range."""
+        try:
+            name = self._names[index]
+        except IndexError:
+            return None
+        return self[name]
 
     def try_first(self) -> "DataBlock | None":
         """Try to return the first data block in the STAR file, return None if empty."""
-        if self._blocks:
-            return self[0]
-        else:
-            return None
+        return self.try_nth(0)
 
-    def __getitem__(self, key: str | SupportsIndex) -> "DataBlock":
-        if hasattr(key, "__index__"):
-            key = self._names[key]
+    def __getitem__(self, key: str) -> "DataBlock":
         return self._blocks[key]
 
     def __iter__(self) -> Iterator[str]:

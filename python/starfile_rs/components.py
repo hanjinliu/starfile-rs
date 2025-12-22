@@ -21,35 +21,85 @@ class DataBlock:
         """Column names of the data block."""
         return self._rust_obj.column_names()
 
-    def as_single(self) -> "SingleDataBlock":
+    def trust_single(self, allow_conversion: bool = True) -> "SingleDataBlock":
         """Convert this data block to a single data block.
 
         Raises ValueError if conversion is not possible. To safely attempt conversion,
-        use `try_as_single()` instead.
-        """
-        if out := self.try_as_single():
-            return out
-        raise ValueError("Cannot convert to single data block.")
+        use `try_single()` instead.
 
-    def try_as_single(self) -> "SingleDataBlock | None":
-        """Try to convert to a single data block, return None otherwise."""
+        Parameters
+        ----------
+        allow_conversion : bool, default True
+            If True, single-row loop data blocks will be converted to single data blocks
+            by this method. Set this to False if you only want to accept actual single
+            data blocks.
+        """
+        if out := self.try_single(allow_conversion):
+            return out
+        raise ValueError(f"Data block {self.name!r} is not a single data block.")
+
+    def try_single(self, allow_conversion: bool = True) -> "SingleDataBlock | None":
+        """Try to convert to a single data block, return None otherwise.
+
+        Parameters
+        ----------
+        allow_conversion : bool, default True
+            If True, single-row loop data blocks will be converted to single data blocks
+            by this method. Set this to False if you only want to accept actual single
+            data blocks.
+        """
         if isinstance(self, SingleDataBlock):
             return self
         elif isinstance(self, LoopDataBlock):
-            if self._rust_obj.loop_nrows() != 1:
+            if self._rust_obj.loop_nrows() != 1 or not allow_conversion:
                 return None
             return SingleDataBlock(self._rust_obj.as_single())
         else:
             return None
 
-    def as_loop(self) -> "LoopDataBlock":
-        """Try to convert to a loop data block, return None otherwise."""
+    def trust_loop(self, allow_conversion: bool = True) -> "LoopDataBlock":
+        """Convert this data block to a loop data block.
+
+        Raises ValueError if conversion is not possible. To safely attempt conversion,
+        use `try_loop()` instead.
+
+        Parameters
+        ----------
+        allow_conversion : bool, default True
+            If True, single-row loop data blocks will be converted to single data blocks
+            by this method. Set this to False if you only want to accept actual single
+            data blocks.
+        """
+        if out := self.try_loop(allow_conversion):
+            return out
+        raise ValueError(f"Data block {self.name} is not a loop data block.")
+
+    def try_loop(self, allow_conversion: bool = True) -> "LoopDataBlock":
+        """Convert to a loop data block.
+
+        This conversion is always safe, as single data blocks can always be represented
+        as loop data blocks with one row.
+        """
         if isinstance(self, LoopDataBlock):
             return self
-        elif isinstance(self, SingleDataBlock):
+        elif isinstance(self, SingleDataBlock) and allow_conversion:
             return LoopDataBlock(self._rust_obj.as_loop())
-        else:  # pragma: no cover
-            raise RuntimeError("Unreachable code path.")
+        else:
+            raise ValueError(f"Data block {self.name!r} is not a loop data block.")
+
+    def to_pandas(
+        self,
+        string_columns: list[str] = [],
+    ) -> "pd.DataFrame":
+        """Convert the data block to a pandas DataFrame."""
+        return self.trust_loop(True).to_pandas(string_columns=string_columns)
+
+    def to_polars(
+        self,
+        string_columns: list[str] = [],
+    ) -> "pl.DataFrame":
+        """Convert the data block to a polars DataFrame."""
+        return self.trust_loop(True).to_polars(string_columns=string_columns)
 
 
 class SingleDataBlock(DataBlock, Mapping[str, Any]):
@@ -69,24 +119,21 @@ class SingleDataBlock(DataBlock, Mapping[str, Any]):
         """Return the number of items in the single data block."""
         return len(self.columns)
 
-    def to_dict(self) -> dict[str, Any]:
-        """Convert single data block to a dictionary of strings."""
+    def to_dict(
+        self,
+        string_columns: list[str] = [],
+    ) -> dict[str, Any]:
+        """Convert single data block to a dictionary of python objects."""
         dict_str = self._rust_obj.single_to_dict()
-        return {k: _parse_python_scalar(v) for k, v in dict_str.items()}
 
-    def to_pandas(self) -> "pd.DataFrame":
-        """Convert the single data block to a pandas DataFrame."""
-        return self.as_loop().to_pandas()
-
-    def to_polars(self) -> "pl.DataFrame":
-        """Convert the single data block to a polars DataFrame."""
-        return self.as_loop().to_polars()
+        return {
+            k: _parse_python_scalar(v) if k not in string_columns else v
+            for k, v in dict_str.items()
+        }
 
 
 def _parse_python_scalar(value: str) -> Any:
     """Parse a string value to a Python scalar."""
-    if value in _NAN_STRINGS:
-        return None
     try:
         if "." in value or "e" in value or "E" in value:
             return float(value)
@@ -109,13 +156,24 @@ class LoopDataBlock(DataBlock):
         """Return the shape of the loop data block as (nrows, ncolumns)."""
         return (len(self), len(self.columns))
 
-    def to_pandas(self) -> "pd.DataFrame":
+    def to_pandas(
+        self,
+        string_columns: list[str] = [],
+    ) -> "pd.DataFrame":
         """Convert the data block to a pandas DataFrame."""
         import pandas as pd
 
-        return pd.read_csv(
-            self._as_buf(),
-            delimiter=r"\s+",
+        if string_columns:
+            dtype = {col: str for col in string_columns}
+        else:
+            dtype = None
+        # NOTE: converting multiple whitespaces to a single space for pandas read_csv
+        # performs better
+        sep = " "
+        df = pd.read_csv(
+            self._as_buf(sep),
+            dtype=dtype,
+            delimiter=sep,
             names=self.columns,
             header=None,
             comment="#",
@@ -123,10 +181,19 @@ class LoopDataBlock(DataBlock):
             na_values=_NAN_STRINGS,
             engine="c",
         )
+        return df
 
-    def to_polars(self) -> "pl.DataFrame":
+    def to_polars(
+        self,
+        string_columns: list[str] = [],
+    ) -> "pl.DataFrame":
+        """Convert the data block to a polars DataFrame."""
         import polars as pl
 
+        if string_columns:
+            schema_overrides = {col: pl.String for col in string_columns}
+        else:
+            schema_overrides = None
         sep = " "
         return pl.read_csv(
             self._as_buf(sep),
@@ -135,22 +202,7 @@ class LoopDataBlock(DataBlock):
             comment_prefix="#",
             null_values=_NAN_STRINGS,
             new_columns=self.columns,
-        )
-
-    def iter_pandas_chunks(self, chunksize: int = 100) -> "Iterator[pd.DataFrame]":
-        """Convert the data block to an iterator of pandas DataFrame chunks."""
-        import pandas as pd
-
-        yield from pd.read_csv(
-            self._as_buf(),
-            delimiter=r"\s+",
-            names=self.columns,
-            header=None,
-            comment="#",
-            keep_default_na=False,
-            na_values=_NAN_STRINGS,
-            engine="c",
-            chunksize=chunksize,
+            schema_overrides=schema_overrides,
         )
 
     @classmethod
@@ -185,12 +237,9 @@ class LoopDataBlock(DataBlock):
         )
         return cls(rust_block)
 
-    def _as_buf(self, new_sep: str | None = None) -> StringIO:
-        if new_sep is not None:
-            value = self._rust_obj.loop_content_with_sep(new_sep)
-        else:
-            value = self._rust_obj.loop_content()
+    def _as_buf(self, new_sep: str) -> StringIO:
+        value = self._rust_obj.loop_content_with_sep(new_sep).replace("'", '"')
         return StringIO(value)
 
 
-_NAN_STRINGS = ["nan", "NaN", "<NA>"]
+_NAN_STRINGS = ["nan", "NaN", "<NA>", ""]

@@ -234,10 +234,20 @@ impl Scalar {
         Scalar { name, value }
     }
 
+    /// Parse a line to a Scalar
     pub fn from_line(line: &str) -> Self {
-        let parts = line.split_whitespace().collect::<Vec<&str>>();
+        let parts: Vec<&str> = line.splitn(2, char::is_whitespace).collect();
         if parts.len() >= 2 {
-            Scalar::new(parts[0][1..].to_string(), parts[1].to_string())
+            let val_str = parts[1].trim();
+            // trim quotes if present
+            let val_str_normed = if val_str.starts_with('"') && val_str.ends_with('"') {
+                &val_str[1..val_str.len()-1]
+            } else if val_str.starts_with('\'') && val_str.ends_with('\'') {
+                &val_str[1..val_str.len()-1]
+            } else {
+                val_str
+            };
+            Scalar::new(parts[0][1..].to_string(), val_str_normed.to_string())
         } else {
             Scalar::new(parts[0][1..].to_string(), String::new())
         }

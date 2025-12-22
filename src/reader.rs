@@ -160,7 +160,7 @@ fn parse_loop_block<R: io::BufRead>(reader: &mut R) -> io::Result<LoopData> {
     let mut column_names = Vec::<String>::new();
 
     // Parse column names
-    let mut nrows = 0;
+    let mut nrows = 1;
     let mut last_line = loop {
         let mut buf = String::new();
         match reader.read_line(&mut buf) {
