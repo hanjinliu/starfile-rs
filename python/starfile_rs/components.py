@@ -1,10 +1,12 @@
 from io import StringIO
-from typing import Any, Iterator, TYPE_CHECKING, Mapping
+from typing import Any, Iterable, Iterator, TYPE_CHECKING, Mapping
 from starfile_rs import _starfile_rs_rust as _rs
 
 if TYPE_CHECKING:
+    import numpy as np
     import pandas as pd
     import polars as pl
+    from typing import Self
 
 
 class DataBlock:
@@ -20,6 +22,9 @@ class DataBlock:
     def columns(self) -> list[str]:
         """Column names of the data block."""
         return self._rust_obj.column_names()
+
+    def _ipython_key_completions_(self) -> list[str]:
+        return self.columns
 
     def trust_single(self, allow_conversion: bool = True) -> "SingleDataBlock":
         """Convert this data block to a single data block.
@@ -101,35 +106,82 @@ class DataBlock:
         """Convert the data block to a polars DataFrame."""
         return self.trust_loop(True).to_polars(string_columns=string_columns)
 
+    def clone(self) -> "Self":
+        """Create a clone of the DataBlock."""
+        raise NotImplementedError("Subclasses must implement clone() method.")
+
+    def to_string(self) -> str:
+        """Convert the data block to a string."""
+        raise NotImplementedError("Subclasses must implement to_string() method.")
+
 
 class SingleDataBlock(DataBlock, Mapping[str, Any]):
     def __getitem__(self, key: str) -> str:
         """Get the value of a single data item by its key."""
-        value_str = self._rust_obj.single_to_dict()[key]
-        return _parse_python_scalar(value_str)
+        for k, value_str in self._rust_obj.single_to_list():
+            if k == key:
+                return _parse_python_scalar(value_str)
+        raise KeyError(key)
 
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__} of name={self.name!r}, items={self.to_dict()!r}>"
 
     def __iter__(self) -> Iterator[str]:
         """Iterate over the keys of the single data block."""
-        return iter(self._rust_obj.single_to_dict())
+        return iter(self.columns)
 
     def __len__(self) -> int:
         """Return the number of items in the single data block."""
         return len(self.columns)
+
+    @classmethod
+    def from_iterable(
+        cls,
+        name: str,
+        data: dict[str, Any] | Iterable[tuple[str, Any]],
+    ) -> "SingleDataBlock":
+        """Create a SingleDataBlock from a dict-like python objects."""
+        if isinstance(data, Mapping):
+            it = data.items()
+        else:
+            it = data
+        str_data = [(k, str(v)) for k, v in it]
+        rust_block = _rs.DataBlock.construct_single_block(
+            name=name,
+            scalars=str_data,
+        )
+        return cls(rust_block)
 
     def to_dict(
         self,
         string_columns: list[str] = [],
     ) -> dict[str, Any]:
         """Convert single data block to a dictionary of python objects."""
-        dict_str = self._rust_obj.single_to_dict()
-
         return {
             k: _parse_python_scalar(v) if k not in string_columns else v
-            for k, v in dict_str.items()
+            for k, v in self._rust_obj.single_to_list()
         }
+
+    def to_list(self, string_columns: list[str] = []) -> list[tuple[str, Any]]:
+        """Convert single data block to a list of key-value pairs."""
+        return [
+            (k, _parse_python_scalar(v) if k not in string_columns else v)
+            for k, v in self._rust_obj.single_to_list()
+        ]
+
+    def clone(self) -> "SingleDataBlock":
+        """Create a clone of the SingleDataBlock."""
+        new_block_rs = _rs.DataBlock.construct_single_block(
+            name=self.name,
+            content=list(self._rust_obj.single_to_list()),
+        )
+        return SingleDataBlock(new_block_rs)
+
+    def to_string(self) -> str:
+        """Convert the single data block to a string."""
+        return "\n".join(
+            f"_{n} {_python_obj_to_str(v)}" for n, v in self._rust_obj.single_to_list()
+        )
 
 
 def _parse_python_scalar(value: str) -> Any:
@@ -214,7 +266,7 @@ class LoopDataBlock(DataBlock):
             sep=" ",
             header=False,
             index=False,
-            na_rep="<NA>",
+            na_rep="",
             float_format="%.6g",
         )
         buf.seek(0)
@@ -223,6 +275,94 @@ class LoopDataBlock(DataBlock):
             columns=df.columns.tolist(),
             content=buf.read(),
             nrows=len(df),
+        )
+        return cls(rust_block)
+
+    @classmethod
+    def from_polars(cls, name: str, df: "pl.DataFrame") -> "LoopDataBlock":
+        """Create a LoopDataBlock from a polars DataFrame."""
+        buf = StringIO()
+        df.write_csv(
+            buf,
+            separator=" ",
+            include_header=False,
+            null_value='""',
+            float_precision=6,
+        )
+        buf.seek(0)
+        rust_block = _rs.DataBlock.construct_loop_block(
+            name=name,
+            columns=df.columns,
+            content=buf.read(),
+            nrows=len(df),
+        )
+        return cls(rust_block)
+
+    @classmethod
+    def from_numpy(
+        cls,
+        name: str,
+        array: "np.ndarray",
+        columns: list[str] | None = None,
+    ) -> "LoopDataBlock":
+        """Create a LoopDataBlock from a numpy ndarray."""
+        import numpy as np
+
+        if array.ndim == 1 and array.dtype.names is not None:
+            if columns is None:
+                columns = list(array.dtype.names)
+            nrows = array.shape[0]
+        elif array.ndim != 2:
+            nrows, ncols = array.shape
+            if columns is None:
+                columns = [f"column_{i}" for i in range(ncols)]
+            else:
+                raise ValueError("Numpy array must be 2-dimensional.")
+        elif len(columns) != ncols:
+            raise ValueError(
+                "Length of columns must match number of columns in the array."
+            )
+        buf = StringIO()
+        np.savetxt(
+            buf,
+            array,
+            fmt="%s",
+            delimiter=" ",
+        )
+        buf.seek(0)
+        rust_block = _rs.DataBlock.construct_loop_block(
+            name=name,
+            columns=columns,
+            content=buf.read(),
+            nrows=nrows,
+        )
+        return cls(rust_block)
+
+    @classmethod
+    def from_obj(
+        cls,
+        name: str,
+        data: Any,
+    ):
+        from csv import writer
+
+        buf = StringIO()
+        if isinstance(data, Mapping):
+            columns = list(data.keys())
+            it = zip(*data.values())
+        else:
+            columns = [f"column_{i}" for i in range(len(data[0]))]
+            it = data
+        nrows = 0
+        w = writer(buf, delimiter=" ")
+        for row in it:
+            w.writerow([_python_obj_to_str(val) for val in row])
+            nrows += 1
+        rust_block = _rs.DataBlock.construct_loop_block(
+            name=name,
+            columns=columns,
+            content=buf.getvalue(),
+            nrows=nrows,
         )
         return cls(rust_block)
 
@@ -237,9 +377,33 @@ class LoopDataBlock(DataBlock):
         )
         return cls(rust_block)
 
+    def clone(self) -> "LoopDataBlock":
+        """Create a clone of the LoopDataBlock."""
+        new_block_rs = _rs.DataBlock.construct_loop_block(
+            name=self.name,
+            content=self._rust_obj.loop_content(),
+            columns=self.columns,
+            nrows=len(self),
+        )
+        return LoopDataBlock(new_block_rs)
+
+    def to_string(self) -> str:
+        """Convert the loop data block to a string."""
+        sep = " "
+        column_str = "\n".join(f"_{col}" for col in self.columns)
+        content = self._rust_obj.loop_content_with_sep(sep)
+        return f"loop_\n{column_str}\n{content}"
+
     def _as_buf(self, new_sep: str) -> StringIO:
         value = self._rust_obj.loop_content_with_sep(new_sep).replace("'", '"')
         return StringIO(value)
 
 
 _NAN_STRINGS = ["nan", "NaN", "<NA>", ""]
+
+
+def _python_obj_to_str(value: Any) -> str:
+    """Convert a Python scalar to a string representation for STAR files."""
+    if value == "":
+        return '""'
+    return str(value)

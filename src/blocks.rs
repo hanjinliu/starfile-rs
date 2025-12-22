@@ -67,12 +67,12 @@ impl DataBlock {
         }
     }
 
-    pub fn single_to_dict(&self) -> PyResult<std::collections::HashMap<String, String>> {
+    pub fn single_to_list(&self) -> PyResult<Vec<(String, String)>> {
         match &self.block_type {
             BlockData::Simple(scalars) => {
-                let mut result = std::collections::HashMap::new();
+                let mut result = Vec::new();
                 for scalar in scalars {
-                    result.insert(scalar.name.clone(), scalar.value.clone());
+                    result.push((scalar.name.clone(), scalar.value.clone()));
                 }
                 Ok(result)
             }

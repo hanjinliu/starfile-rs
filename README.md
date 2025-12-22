@@ -7,7 +7,7 @@
 [![codecov](https://codecov.io/gh/hanjinliu/starfile-rs/graph/badge.svg?token=X1F259JYT5)](https://codecov.io/gh/hanjinliu/starfile-rs)
 
 
-A blazing-fast and type-safe STAR file reader (and writer - to be implemented) powered by Rust.
+A blazing-fast and type-safe STAR file reader and writer powered by Rust. This package implements interface with `pandas`/`polars` for modern data manipulation.
 
 ```python
 from starfile_rs import read_star
@@ -41,7 +41,7 @@ All the data are from [Burt et al.](https://zenodo.org/records/11068319)
 
   ![](images/time-random-access.png)
 
-  `starfile-rs` does not parse string to `pandas.DataFrame` until you call `.to_pandas()`, so it is extremely fast for random access in a large STAR file.
+  `starfile-rs` does not parse string to `pandas.DataFrame` until you call `.to_pandas()`, so it is extremely fast for random access in a large STAR file compared to [`starfile`](https://github.com/teamtomo/starfile).
 
 - **Example 2**: Parsing a 12 MB data block (The "particles" block from `"Refine3D/bin6/run_it000_data.star"`).
 

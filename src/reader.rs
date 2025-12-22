@@ -184,6 +184,8 @@ fn parse_loop_block<R: io::BufRead>(reader: &mut R) -> io::Result<LoopData> {
 
     // Parse data rows
     loop {
+        // NOTE: Using push_str is more efficient than Vec<String>, but less flexible
+        // if we want to access individual rows or to insert rows later.
         let mut buf = String::new();
         match reader.read_line(&mut buf) {
             Ok(0) => break, // EOF
