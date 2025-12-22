@@ -1,5 +1,12 @@
 # :star: starfile-rs :crab:
 
+[![BSD-3-Clause License](https://img.shields.io/pypi/l/starfile-rs.svg?color=green)](https://github.com/hanjinliu/starfile-rs/blob/main/LICENSE)
+[![Python package index download statistics](https://img.shields.io/pypi/dm/starfile-rs.svg)](https://pypistats.org/packages/starfile-rs)
+[![PyPI version](https://badge.fury.io/py/starfile-rs.svg)](https://badge.fury.io/py/starfile-rs)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/starfile-rs.svg)](https://pypi.org/project/starfile-rs)
+[![codecov](https://codecov.io/gh/hanjinliu/starfile-rs/graph/badge.svg?token=X1F259JYT5)](https://codecov.io/gh/hanjinliu/starfile-rs)
+
+
 A blazing-fast and type-safe STAR file reader (and writer - to be implemented) powered by Rust.
 
 ```python
