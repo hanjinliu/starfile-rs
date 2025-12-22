@@ -16,6 +16,7 @@ testing = [
     "pytest",
     "starfile-rs[pandas]",
     "starfile-rs[polars]",
+    "maturin>=1.10,<2.0",
 ]
 pandas = [
     "pandas>=2.0.0",
