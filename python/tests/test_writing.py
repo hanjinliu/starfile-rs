@@ -167,13 +167,15 @@ def test_string_with_space_simple():
     star = empty_star()
     star["simple"] = {
         "a": "string with space",
-        "b": "nospace"
+        "b": "nospace",
+        "c": '"OK "',
     }
     s0 = star.to_string(comment=None)
     assert s0.strip() == (
         'data_simple\n\n'
         '_a "string with space"\n'
-        '_b nospace'
+        '_b nospace\n'
+        '_c "OK "'
     )
 
 def test_string_with_space_loop():

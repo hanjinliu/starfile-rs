@@ -312,12 +312,12 @@ class LoopDataBlock(DataBlock):
         *,
         separator: str = "\t",
         float_precision: int = 6,
-        unsafe_quotes: bool = False,
+        quote_unsafe: bool = False,
     ) -> "LoopDataBlock":
         """Create a LoopDataBlock from a pandas DataFrame."""
         # pandas to_csv does not quote empty string. This causes incorrect parsing
         # when reading output star files by RELION.
-        if not unsafe_quotes:
+        if not quote_unsafe:
             new_columns: "list[pd.Series]" = []
             for column_name in df.columns:
                 if (col := df[column_name]).dtype.kind not in "biuf":
@@ -356,12 +356,12 @@ class LoopDataBlock(DataBlock):
         *,
         separator: str = "\t",
         float_precision: int = 6,
-        unsafe_quotes: bool = False,
+        quote_unsafe: bool = False,
     ) -> "LoopDataBlock":
         """Create a LoopDataBlock from a polars DataFrame."""
         import polars as pl
 
-        if not unsafe_quotes:
+        if not quote_unsafe:
             expressions: "list[pl.Expr]" = []
             for column_name in df.columns:
                 if df[column_name].dtype != pl.String:
@@ -400,6 +400,7 @@ class LoopDataBlock(DataBlock):
         separator: str = "\t",
     ) -> "LoopDataBlock":
         """Create a LoopDataBlock from a numpy ndarray."""
+        # TODO: check quoting
         import numpy as np
 
         if array.ndim == 1 and array.dtype.names is not None:
@@ -440,6 +441,7 @@ class LoopDataBlock(DataBlock):
         data: Any,
         separator: str = "\t",
     ) -> "LoopDataBlock":
+        # TODO: check quoting
         buf = StringIO()
         if isinstance(data, Mapping):
             columns = list(data.keys())
@@ -496,8 +498,6 @@ def _python_obj_to_str(value: Any) -> str:
             return '""'
         elif " " in value:
             if value[0] == value[-1] == '"':
-                return value
-            elif value[0] == value[-1] == "'":
                 return value
             return f'"{value}"'
     return str(value)

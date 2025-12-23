@@ -230,6 +230,7 @@ class StarDict(MutableMapping[str, "DataBlock"]):
         self,
         name: str,
         data: dict[str, Any] | Iterable[tuple[str, Any]],
+        *,
         inplace: bool = True,
     ) -> "StarDict":
         """Set a single data block in the STAR file.
@@ -251,14 +252,31 @@ class StarDict(MutableMapping[str, "DataBlock"]):
     def with_loop_block(
         self,
         name: str,
-        data: "pd.DataFrame | pl.DataFrame | np.ndarray",
+        data: Any,
+        *,
+        quote_unsafe: bool = False,
         inplace: bool = True,
     ) -> "StarDict":
-        """Set a loop data block in the STAR file."""
+        """Set a loop data block in the STAR file.
+
+        Parameters
+        ----------
+        name : str
+            The name of the data block.
+        data : loop-like object
+            The data to be stored in the loop block. Can be a pandas DataFrame,
+            polars DataFrame, numpy ndarray, or other convertible objects.
+        quote_unsafe : bool, default False
+            If True, string columns will not be checked for whether they need quoting to
+            improve performance. Empty string and string with spaces need quoting in
+            STAR files, so setting this to True may lead to broken files.
+        inplace : bool, default True
+            If True, modify the StarDict in place. If False, return a new StarDict
+        """
         if _is_pandas_dataframe(data):
-            block = LoopDataBlock.from_pandas(name, data)
+            block = LoopDataBlock.from_pandas(name, data, quote_unsafe=quote_unsafe)
         elif _is_polars_dataframe(data):
-            block = LoopDataBlock.from_polars(name, data)
+            block = LoopDataBlock.from_polars(name, data, quote_unsafe=quote_unsafe)
         elif _is_numpy_array(data):
             block = LoopDataBlock.from_numpy(name, data)
         else:
