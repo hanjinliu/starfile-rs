@@ -1,6 +1,6 @@
 from io import StringIO
 from csv import writer
-from typing import Any, Iterable, Iterator, TYPE_CHECKING, Mapping
+from typing import Any, Iterable, Iterator, TYPE_CHECKING, Literal, Mapping
 from starfile_rs import _starfile_rs_rust as _rs
 
 if TYPE_CHECKING:
@@ -23,6 +23,11 @@ class DataBlock:
     def columns(self) -> list[str]:
         """Column names of the data block."""
         return self._rust_obj.column_names()
+
+    @columns.setter
+    def columns(self, names: list[str]) -> None:
+        """Set the column names of the data block."""
+        return self._rust_obj.set_column_names(names)
 
     def _ipython_key_completions_(self) -> list[str]:
         return self.columns
@@ -80,7 +85,7 @@ class DataBlock:
             return out
         raise ValueError(f"Data block {self.name} is not a loop data block.")
 
-    def try_loop(self, allow_conversion: bool = True) -> "LoopDataBlock":
+    def try_loop(self, allow_conversion: bool = True) -> "LoopDataBlock | None":
         """Convert to a loop data block.
 
         This conversion is always safe, as single data blocks can always be represented
@@ -91,7 +96,7 @@ class DataBlock:
         elif isinstance(self, SingleDataBlock) and allow_conversion:
             return LoopDataBlock(self._rust_obj.as_loop())
         else:
-            raise ValueError(f"Data block {self.name!r} is not a loop data block.")
+            return None
 
     def to_pandas(
         self,
@@ -106,6 +111,13 @@ class DataBlock:
     ) -> "pl.DataFrame":
         """Convert the data block to a polars DataFrame."""
         return self.trust_loop(True).to_polars(string_columns=string_columns)
+
+    def to_numpy(
+        self,
+        structure_by: Literal[None, "pandas", "polars"] = None,
+    ) -> "np.ndarray":
+        """Convert the data block to a numpy ndarray."""
+        return self.trust_loop(True).to_numpy(structure_by=structure_by)
 
     def clone(self) -> "Self":
         """Create a clone of the DataBlock."""
@@ -258,17 +270,57 @@ class LoopDataBlock(DataBlock):
             schema_overrides=schema_overrides,
         )
 
+    def to_numpy(
+        self,
+        structure_by: Literal[None, "pandas", "polars"] = None,
+    ) -> "np.ndarray":
+        """Convert the data block to a numpy ndarray.
+
+        If `structure_by` is given, a structured array will be created using the
+        specified library to determine the data types of each column. Otherwise, a
+        numeric array will be created by loading the data with `numpy.loadtxt()`.
+        """
+        import numpy as np
+
+        if structure_by is not None:
+            if structure_by == "pandas":
+                df = self.to_pandas()
+                # make structured array
+                arr = np.empty(
+                    len(df), dtype=[(col, df[col].dtype.type) for col in df.columns]
+                )
+                for col in df.columns:
+                    arr[col] = df[col].to_numpy()
+            elif structure_by == "polars":
+                arr = self.to_polars().to_numpy(structured=True)
+            else:
+                raise ValueError(
+                    "structure_by must be one of None, 'pandas', or 'polars'."
+                )
+        else:
+            sep = " "
+            buf = self._as_buf(sep)
+            arr = np.loadtxt(buf, delimiter=sep, ndmin=2, quotechar='"')
+        return arr
+
     @classmethod
-    def from_pandas(cls, name: str, df: "pd.DataFrame") -> "LoopDataBlock":
+    def from_pandas(
+        cls,
+        name: str,
+        df: "pd.DataFrame",
+        *,
+        separator: str = "\t",
+        float_precision: int = 6,
+    ) -> "LoopDataBlock":
         """Create a LoopDataBlock from a pandas DataFrame."""
         buf = StringIO()
         df.to_csv(
             buf,
-            sep=" ",
+            sep=separator,
             header=False,
             index=False,
             na_rep="",
-            float_format="%.6g",
+            float_format=f"%.{float_precision}g",
         )
         buf.seek(0)
         rust_block = _rs.DataBlock.construct_loop_block(
@@ -280,15 +332,22 @@ class LoopDataBlock(DataBlock):
         return cls(rust_block)
 
     @classmethod
-    def from_polars(cls, name: str, df: "pl.DataFrame") -> "LoopDataBlock":
+    def from_polars(
+        cls,
+        name: str,
+        df: "pl.DataFrame",
+        *,
+        separator: str = "\t",
+        float_precision: int = 6,
+    ) -> "LoopDataBlock":
         """Create a LoopDataBlock from a polars DataFrame."""
         buf = StringIO()
         df.write_csv(
             buf,
-            separator=" ",
+            separator=separator,
             include_header=False,
             null_value='""',
-            float_precision=6,
+            float_precision=float_precision,
         )
         buf.seek(0)
         rust_block = _rs.DataBlock.construct_loop_block(
@@ -304,7 +363,9 @@ class LoopDataBlock(DataBlock):
         cls,
         name: str,
         array: "np.ndarray",
+        *,
         columns: list[str] | None = None,
+        separator: str = "\t",
     ) -> "LoopDataBlock":
         """Create a LoopDataBlock from a numpy ndarray."""
         import numpy as np
@@ -313,22 +374,23 @@ class LoopDataBlock(DataBlock):
             if columns is None:
                 columns = list(array.dtype.names)
             nrows = array.shape[0]
-        elif array.ndim != 2:
+        elif array.ndim == 2:
             nrows, ncols = array.shape
             if columns is None:
                 columns = [f"column_{i}" for i in range(ncols)]
-            else:
-                raise ValueError("Numpy array must be 2-dimensional.")
-        elif len(columns) != ncols:
-            raise ValueError(
-                "Length of columns must match number of columns in the array."
-            )
+            elif len(columns) != ncols:
+                raise ValueError(
+                    "Length of columns must match number of columns in the array."
+                )
+        else:
+            raise ValueError("Numpy array must be 2-dimensional.")
+
         buf = StringIO()
         np.savetxt(
             buf,
             array,
             fmt="%s",
-            delimiter=" ",
+            delimiter=separator,
         )
         buf.seek(0)
         rust_block = _rs.DataBlock.construct_loop_block(
@@ -344,7 +406,8 @@ class LoopDataBlock(DataBlock):
         cls,
         name: str,
         data: Any,
-    ):
+        separator: str = "\t",
+    ) -> "LoopDataBlock":
         buf = StringIO()
         if isinstance(data, Mapping):
             columns = list(data.keys())
@@ -353,7 +416,7 @@ class LoopDataBlock(DataBlock):
             columns = [f"column_{i}" for i in range(len(data[0]))]
             it = data
         nrows = 0
-        w = writer(buf, delimiter=" ")
+        w = writer(buf, delimiter=separator)
         for row in it:
             w.writerow([_python_obj_to_str(val) for val in row])
             nrows += 1
@@ -386,11 +449,15 @@ class LoopDataBlock(DataBlock):
         )
         return LoopDataBlock(new_block_rs)
 
-    def to_string(self) -> str:
+    def to_string(self, column_numbering: bool = True) -> str:
         """Convert the loop data block to a string."""
-        sep = " "
-        column_str = "\n".join(f"_{col}" for col in self.columns)
-        content = self._rust_obj.loop_content_with_sep(sep)
+        if column_numbering:
+            column_str = "\n".join(
+                f"_{col} #{ith + 1}" for ith, col in enumerate(self.columns)
+            )
+        else:
+            column_str = "\n".join(f"_{col}" for col in self.columns)
+        content = self._rust_obj.loop_content()
         return f"loop_\n{column_str}\n{content}"
 
     def _as_buf(self, new_sep: str) -> StringIO:

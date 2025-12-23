@@ -2,7 +2,7 @@ import time
 from pathlib import Path
 # import pytest
 from starfile_rs import read_star, empty_star, as_star
-
+import pandas as pd
 from .constants import loop_simple, postprocess, test_df
 from .utils import generate_large_star_file
 
@@ -47,25 +47,23 @@ def test_create_from_dataframes(tmpdir):
     assert len(star) == 2
     assert list(star.keys()) == ['0', '1']
 
-# TODO: support appending #i
-# def test_can_write_non_zero_indexed_one_row_dataframe(tmpdir):
-#     # see PR #13 - https://github.com/alisterburt/starfile/pull/13
-#     df = pd.DataFrame([[1, 2, 3]], columns=["A", "B", "C"])
-#     df.index += 1
+def test_can_write_non_zero_indexed_one_row_dataframe(tmpdir):
+    # see PR #13 - https://github.com/alisterburt/starfile/pull/13
+    df = pd.DataFrame([[1, 2, 3]], columns=["A", "B", "C"])
+    df.index += 1
 
+    filename = Path(tmpdir, "test.star")
+    as_star(df).write(filename)
+    with open(filename) as output_file:
+        output = output_file.read()
 
-#     filename = Path(tmpdir, "test.star")
-#     as_star(df).write(filename)
-#     with open(filename) as output_file:
-#         output = output_file.read()
-
-#     expected = (
-#         "_A #1\n"
-#         "_B #2\n"
-#         "_C #3\n"
-#         "1\t2\t3"
-#     )
-#     assert (expected in output)
+    expected = (
+        "_A #1\n"
+        "_B #2\n"
+        "_C #3\n"
+        "1\t2\t3"
+    )
+    assert (expected in output)
 
 
 # @pytest.mark.parametrize("quote_character, quote_all_strings, num_quotes",

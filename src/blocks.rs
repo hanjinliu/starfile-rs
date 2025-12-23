@@ -52,6 +52,10 @@ impl DataBlock {
         self.name.clone()
     }
 
+    pub fn set_name(&mut self, name: String) {
+        self.name = name;
+    }
+
     pub fn column_names(&self) -> PyResult<Vec<String>> {
         match &self.block_type {
             BlockData::Simple(scalars) => {
@@ -63,6 +67,34 @@ impl DataBlock {
             }
             BlockData::EOF => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                 "EOF block has no columns",
+            )),
+        }
+    }
+
+    pub fn set_column_names(&mut self, names: Vec<String>) -> PyResult<()> {
+        match &mut self.block_type {
+            BlockData::Loop(loop_data) => {
+                if names.len() != loop_data.columns.len() {
+                    return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                        "Number of names does not match number of columns.",
+                    ));
+                }
+                loop_data.columns = names;
+                Ok(())
+            }
+            BlockData::Simple(simple_data) => {
+                if names.len() != simple_data.len() {
+                    return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                        "Number of names does not match number of scalars.",
+                    ));
+                }
+                for (scalar, name) in simple_data.iter_mut().zip(names.iter()) {
+                    scalar.name = name.clone();
+                }
+                Ok(())
+            }
+            _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "Not a loop data block",
             )),
         }
     }

@@ -5,8 +5,16 @@ from starfile_rs.components import DataBlock, LoopDataBlock, SingleDataBlock
 
 
 class StarReader:
-    def __init__(self, path: str | Path) -> None:
-        self._rust_obj = _rs.StarReader(str(path))
+    def __init__(self, rust_obj: _rs.StarReader | _rs.StarTextReader) -> None:
+        self._rust_obj = rust_obj
+
+    @classmethod
+    def from_filepath(cls, path: str | Path) -> "StarReader":
+        return cls(_rs.StarReader(str(path)))
+
+    @classmethod
+    def from_text(cls, content: str) -> "StarReader":
+        return cls(_rs.StarTextReader(content))
 
     def __enter__(self) -> "StarReader":
         return self

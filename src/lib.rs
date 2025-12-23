@@ -6,6 +6,7 @@ pub mod blocks;
 #[pymodule]
 fn _starfile_rs_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<reader::StarReader>()?;
+    m.add_class::<reader::StarTextReader>()?;
     m.add_class::<blocks::DataBlock>()?;
     m.add_class::<blocks::BlockType>()?;
     Ok(())

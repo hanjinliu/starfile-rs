@@ -27,13 +27,23 @@ def read_star(path: "os.PathLike") -> "StarDict":
     return StarDict.from_star(path)
 
 
+def read_star_text(content: str) -> "StarDict":
+    """Read a STAR file from a string and return its contents as a StarFileData object."""
+    return StarDict.from_text(content)
+
+
 def read_star_block(path: "os.PathLike", block_name: str) -> "DataBlock":
     """Read a specific data block from a STAR file."""
-    with StarReader(path) as reader:
-        for block in reader.iter_blocks():
-            if block.name == block_name:
-                return block
+    for block in iter_star_blocks(path):
+        if block.name == block_name:
+            return block
     raise KeyError(f"Data block with name {block_name!r} not found in file {path!r}.")
+
+
+def iter_star_blocks(path: "os.PathLike") -> "Iterator[DataBlock]":
+    """Iterate over data blocks in a STAR file."""
+    with StarReader.from_filepath(path) as reader:
+        yield from reader.iter_blocks()
 
 
 def empty_star() -> "StarDict":
@@ -113,17 +123,22 @@ class StarDict(MutableMapping[str, "DataBlock"]):
         return self._names
 
     @classmethod
-    def from_star(cls, path: str) -> "StarDict":
+    def from_star(cls, path: "os.PathLike") -> "StarDict":
         """Construct a StarDict from a STAR file."""
-        with StarReader(path) as reader:
-            blocks = cls.from_blocks(reader.iter_blocks())
-        return cls(blocks, list(blocks.keys()))
+        with StarReader.from_filepath(path) as reader:
+            return cls.from_blocks(reader.iter_blocks())
+
+    @classmethod
+    def from_text(cls, path: str) -> "StarDict":
+        """Construct a StarDict from a STAR file content string."""
+        with StarReader.from_text(path) as reader:
+            return cls.from_blocks(reader.iter_blocks())
 
     @classmethod
     def from_blocks(cls, blocks: Iterable["DataBlock"]) -> "StarDict":
         """Construct a StarDict from a list of DataBlock objects."""
         block_dict = {block.name: block for block in blocks}
-        names = [block.name for block in blocks]
+        names = list(block_dict.keys())
         return cls(block_dict, names)
 
     def nth(self, index: int) -> "DataBlock":
@@ -171,6 +186,32 @@ class StarDict(MutableMapping[str, "DataBlock"]):
             d[name] = block.__class__.__name__
         return f"<{self.__class__.__name__} of blocks={d!r}>"
 
+    def rename(self, mapping: dict[str, str], inplace: bool = True) -> "StarDict":
+        """Rename data blocks in the STAR file.
+
+        The `name` attribute of each data block will also be updated.
+
+        Examples
+        --------
+        ```python
+        from starfile_rs import read_star
+        star = read_star("path/to/file.star")
+        star_renamed = star.rename({"old_name": "new_name"})
+        ```
+        """
+        new_blocks = {}
+        for name, block in self._blocks.items():
+            new_name = mapping.get(name, name)
+            block._rust_obj.set_name(new_name)
+            new_blocks[new_name] = block
+        new_names = list(new_blocks.keys())
+        if inplace:
+            self._blocks = new_blocks
+            self._names = new_names
+            return self
+        else:
+            return StarDict(new_blocks, new_names)
+
     # mutable methods
     def with_block(
         self,
@@ -205,7 +246,7 @@ class StarDict(MutableMapping[str, "DataBlock"]):
             "new_block",
             {"key1": 1, "key2": 2.0, "key3": "value"}
         )
-
+        ```
         """
         block = SingleDataBlock.from_iterable(name, data)
         return self.with_block(block, inplace=inplace)
@@ -260,7 +301,7 @@ def _is_numpy_array(obj: Any) -> "TypeGuard[np.ndarray]":
 
 
 def _is_instance(obj, mod: str, cls_name: str):
-    if not isinstance(obj_mod := getattr(obj, "__module__", None), str):
+    if not isinstance(obj_mod := getattr(type(obj), "__module__", None), str):
         return False
     if obj_mod.split(".")[0] != mod:
         return False
