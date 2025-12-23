@@ -1,4 +1,5 @@
 from io import StringIO
+from csv import writer
 from typing import Any, Iterable, Iterator, TYPE_CHECKING, Mapping
 from starfile_rs import _starfile_rs_rust as _rs
 
@@ -344,8 +345,6 @@ class LoopDataBlock(DataBlock):
         name: str,
         data: Any,
     ):
-        from csv import writer
-
         buf = StringIO()
         if isinstance(data, Mapping):
             columns = list(data.keys())

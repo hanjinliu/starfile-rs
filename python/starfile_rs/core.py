@@ -1,6 +1,16 @@
 from importlib import import_module
-from io import TextIOBase, StringIO
-from typing import Any, Iterable, Iterator, TYPE_CHECKING, MutableMapping
+from pathlib import Path
+from io import TextIOBase
+from typing import (
+    Any,
+    Iterable,
+    Iterator,
+    TYPE_CHECKING,
+    Literal,
+    Mapping,
+    MutableMapping,
+    overload,
+)
 from starfile_rs.io import StarReader
 from starfile_rs.components import DataBlock, SingleDataBlock, LoopDataBlock
 
@@ -29,6 +39,67 @@ def read_star_block(path: "os.PathLike", block_name: str) -> "DataBlock":
 def empty_star() -> "StarDict":
     """Create an empty STAR file representation."""
     return StarDict({}, [])
+
+
+@overload
+def as_star(obj: Any) -> "StarDict": ...
+@overload
+def as_star(obj: Literal[None], **kwargs) -> "StarDict": ...
+
+
+def as_star(obj=None, /, **kwargs) -> "StarDict":
+    """Convenient function to convert an object to a StarDict.
+
+    Allowed input types include:
+    - `StarDict`: returns the same object
+    - dict of scalars: creates a `StarDict` containing a single data block
+    - a block-like object: creates a `StarDict` with a single loop block
+    - dict of block-like data: most complete construction of `StarDict`
+    - sequence of block-like data: creates a `StarDict` with numbered block names
+
+    Each data block can also be provided as keyword arguments. If both a positional
+    object and keyword arguments are provided, a `TypeError` is raised.
+
+    For safer construction of `StarDict` objects, use `empty_star()` and set blocks
+    explicitly with `with_single_block()` and `with_loop_block()`.
+
+    Examples
+    --------
+    ```python
+    import polars as pl
+    import pandas as pd
+    from starfile_rs import as_star
+
+    as_star({"key1": 1, "key2": 2.0, "key3": "value"})
+    as_star(pl.DataFrame({"col1": [1, 2], "col2": [3.0, 4.0}))
+    as_star(
+        optics={"mag": 84000, "cs": 2.7},
+        particles=pd.DataFrame({"x": [1.0, 2.0], "y": [3.0, 4.0]})
+    )
+    """
+    if obj is None:
+        if not kwargs:
+            raise TypeError("Either an object or keyword arguments must be provided.")
+        return as_star(kwargs)
+    if kwargs:
+        raise TypeError("Cannot provide both positional object and keyword arguments.")
+    if isinstance(obj, StarDict):
+        return obj
+    out = empty_star()
+    if isinstance(obj, Mapping):
+        if any(_is_scalar(v) for v in obj.values()):
+            out.with_single_block("", obj)
+        else:
+            for key, value in obj.items():
+                if isinstance(value, Mapping):
+                    out.with_single_block(key, value)
+                else:
+                    out.with_loop_block(key, value)
+    elif isinstance(obj, (list, tuple)):
+        return as_star({str(idx): df for idx, df in enumerate(obj)})
+    else:
+        out.with_loop_block("", obj)
+    return out
 
 
 class StarDict(MutableMapping[str, "DataBlock"]):
@@ -156,18 +227,24 @@ class StarDict(MutableMapping[str, "DataBlock"]):
             block = LoopDataBlock.from_obj(name, data)
         return self.with_block(block, inplace=inplace)
 
-    def write(self, file: TextIOBase) -> None:
+    def write(self, file: str | Path | TextIOBase) -> None:
         """Serialize the STAR file contents to a string."""
-        for name, block in self._blocks.items():
-            file.write(f"data_{name}\n\n")
-            file.write(block.to_string())
-            file.write("\n")
+        if isinstance(file, (str, Path)):
+            with open(file, "w") as f:
+                f.write(self.to_string())
+        else:
+            file.write(self.to_string())
 
-    def to_string(self) -> str:
+    def to_string(self, comment: str | None = None) -> str:
         """Convert the STAR file contents to a string."""
-        buf = StringIO()
-        self.write(buf)
-        return buf.getvalue()
+        strings = []
+        for name, block in self._blocks.items():
+            strings.append(f"\ndata_{name}\n\n")
+            strings.append(block.to_string())
+            strings.append("\n")
+        if comment:
+            strings.insert(0, f"# {comment}\n")
+        return "".join(strings)
 
 
 def _is_pandas_dataframe(obj: Any) -> "TypeGuard[pd.DataFrame]":
@@ -192,3 +269,12 @@ def _is_instance(obj, mod: str, cls_name: str):
     imported_mod = import_module(mod)
     cls = getattr(imported_mod, cls_name)
     return isinstance(obj, cls)
+
+
+def _is_scalar(obj: Any) -> bool:
+    return (
+        isinstance(obj, (str, int, float, bool))
+        or obj is None
+        or hasattr(obj, "__index__")
+        or hasattr(obj, "__float__")
+    )

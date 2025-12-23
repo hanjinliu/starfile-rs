@@ -17,6 +17,7 @@ testing = [
     "pytest-cov",
     "starfile-rs[pandas]",
     "starfile-rs[polars]",
+    "starfile-rs[numpy]",
     "maturin>=1.10,<2.0",
 ]
 pandas = [
@@ -24,6 +25,9 @@ pandas = [
 ]
 polars = [
     "polars>=1.35.2",
+]
+numpy = [
+    "numpy>=1.24.0",
 ]
 [tool.maturin]
 python-source = "python"
