@@ -101,10 +101,7 @@ def as_star(obj=None, /, **kwargs) -> "StarDict":
             out.with_single_block("", obj)
         else:
             for key, value in obj.items():
-                if isinstance(value, Mapping):
-                    out.with_single_block(key, value)
-                else:
-                    out.with_loop_block(key, value)
+                _set_single_or_double(out, key, value)
     elif isinstance(obj, (list, tuple)):
         return as_star({str(idx): df for idx, df in enumerate(obj)})
     else:
@@ -165,10 +162,7 @@ class StarDict(MutableMapping[str, "DataBlock"]):
         return self._blocks[key]
 
     def __setitem__(self, key, value) -> None:
-        raise AttributeError(
-            "Cannot set item to StarDict. Use `with_single_block()` or `with_block()` "
-            "to explicitly create a new StarDict with the desired block type."
-        )
+        _set_single_or_double(self, key, value)
 
     def __delitem__(self, key: str) -> None:
         self._names.remove(key)
@@ -316,3 +310,10 @@ def _is_scalar(obj: Any) -> bool:
         or hasattr(obj, "__index__")
         or hasattr(obj, "__float__")
     )
+
+
+def _set_single_or_double(star: "StarDict", key: str, value: Any) -> None:
+    if isinstance(value, Mapping):
+        star.with_single_block(key, value, inplace=True)
+    else:
+        star.with_loop_block(key, value, inplace=True)

@@ -466,7 +466,7 @@ class LoopDataBlock(DataBlock):
         return StringIO(value)
 
 
-_NAN_STRINGS = ["nan", "NaN", "<NA>", ""]
+_NAN_STRINGS = ["nan", "NaN", "<NA>"]
 
 
 def _python_obj_to_str(value: Any) -> str:
