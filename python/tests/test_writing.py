@@ -161,3 +161,30 @@ def test_empty_string_loop():
         'data_polars\n\n'
         'loop_\n_a #1\n_b #2\n""\t""\nnon-empty\t""'
     )
+
+def test_string_with_space_simple():
+    # strings with spaces should always be quoted
+    star = empty_star()
+    star["simple"] = {
+        "a": "string with space",
+        "b": "nospace"
+    }
+    s0 = star.to_string(comment=None)
+    assert s0.strip() == (
+        'data_simple\n\n'
+        '_a "string with space"\n'
+        '_b nospace'
+    )
+
+def test_string_with_space_loop():
+    # strings with spaces should always be quoted
+    star = empty_star()
+    star["pandas"] = pd.DataFrame({"a": ["string with space", "nospace"], "b": ["with space", "nospace"]})
+    star["polars"] = pl.DataFrame({"a": ["string with space", "nospace"], "b": ["with space", "nospace"]})
+    s0 = star.to_string(comment=None)
+    assert s0.strip() == (
+        'data_pandas\n\n'
+        'loop_\n_a #1\n_b #2\n"string with space"\t"with space"\nnospace\tnospace\n\n\n'
+        'data_polars\n\n'
+        'loop_\n_a #1\n_b #2\n"string with space"\t"with space"\nnospace\tnospace'
+    )

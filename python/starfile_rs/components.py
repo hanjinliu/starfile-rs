@@ -312,12 +312,23 @@ class LoopDataBlock(DataBlock):
         *,
         separator: str = "\t",
         float_precision: int = 6,
+        unsafe_quotes: bool = False,
     ) -> "LoopDataBlock":
         """Create a LoopDataBlock from a pandas DataFrame."""
         # pandas to_csv does not quote empty string. This causes incorrect parsing
         # when reading output star files by RELION.
-        df_replaced = df.where(df != "", '""')
-        out = df_replaced.to_csv(
+        if not unsafe_quotes:
+            new_columns: "list[pd.Series]" = []
+            for column_name in df.columns:
+                if (col := df[column_name]).dtype.kind not in "biuf":
+                    cond = col.str.contains(" ") | (col == "")
+                    new_col = col.where(~cond, '"' + col + '"')
+                    new_columns.append(new_col)
+            if new_columns:
+                df = df.copy()
+                for col in new_columns:
+                    df[col.name] = col
+        out = df.to_csv(
             sep=separator,
             header=False,
             index=False,
@@ -334,6 +345,7 @@ class LoopDataBlock(DataBlock):
             content=out,
             nrows=len(df),
         )
+
         return cls(rust_block)
 
     @classmethod
@@ -344,13 +356,31 @@ class LoopDataBlock(DataBlock):
         *,
         separator: str = "\t",
         float_precision: int = 6,
+        unsafe_quotes: bool = False,
     ) -> "LoopDataBlock":
         """Create a LoopDataBlock from a polars DataFrame."""
+        import polars as pl
+
+        if not unsafe_quotes:
+            expressions: "list[pl.Expr]" = []
+            for column_name in df.columns:
+                if df[column_name].dtype != pl.String:
+                    continue
+                _col = pl.col(column_name)
+                cond = (
+                    pl.when(_col.str.contains(" ") | _col.eq(""))
+                    .then('"' + _col + '"')
+                    .otherwise(_col)
+                )
+                expressions.append(cond.alias(column_name))
+            if expressions:
+                df = df.with_columns(expressions)
         out = df.write_csv(
             separator=separator,
             include_header=False,
             null_value="<NA>",
             float_precision=float_precision,
+            quote_style="never",
         )
         rust_block = _rs.DataBlock.construct_loop_block(
             name=name,
@@ -461,6 +491,13 @@ _NAN_STRINGS = ["nan", "NaN", "<NA>"]
 
 def _python_obj_to_str(value: Any) -> str:
     """Convert a Python scalar to a string representation for STAR files."""
-    if value == "":
-        return '""'
+    if isinstance(value, str):
+        if value == "":
+            return '""'
+        elif " " in value:
+            if value[0] == value[-1] == '"':
+                return value
+            elif value[0] == value[-1] == "'":
+                return value
+            return f'"{value}"'
     return str(value)
