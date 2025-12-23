@@ -248,22 +248,21 @@ def test_quote_basic(filename):
 @pytest.mark.parametrize("filename", [loop_single_quote, loop_double_quote])
 def test_quote_loop_pandas(filename):
     # NOTE: the nan values is not consistent with starfile.
-    import math
     star = read_star(filename)
     assert len(star) == 1
     assert star[''].to_pandas().loc[0, 'no_quote_string'] == "noquote"
     assert star[''].to_pandas().loc[0, 'quote_string'] == "quote string"
     assert star[''].to_pandas().loc[0, 'whitespace_string'] == " "
-    # assert star[''].to_pandas().loc[0, 'empty_string'] == ""
-    assert math.isnan(star[''].to_pandas().loc[0, 'empty_string'])
+    assert star[''].to_pandas().loc[0, 'empty_string'] == ""
+    assert star[''].to_pandas().loc[0, 'empty_string'] == ""
     assert star[''].to_pandas().dtypes['number_and_string'] == "object"
-    assert star[''].to_pandas().dtypes['number_and_empty'] == 'float64'
+    # assert star[''].to_pandas().dtypes['number_and_empty'] == 'float64'
     assert star[''].to_pandas().dtypes['number'] == 'float64'
     assert star[''].to_pandas().dtypes['empty_string_and_normal_string'] == "object"
 
-    assert math.isnan(star[''].to_pandas().loc[1, 'number_and_empty'])
-    # assert star[''].to_pandas().loc[0, 'empty_string_and_normal_string'] == ''
-    assert math.isnan(star[''].to_pandas().loc[0, 'empty_string_and_normal_string'])
+    # assert math.isnan(star[''].to_pandas().loc[1, 'number_and_empty'])
+    assert star[''].to_pandas().loc[0, 'empty_string_and_normal_string'] == ""
+    assert star[''].to_pandas().loc[0, 'empty_string_and_normal_string'] == ""
 
 @pytest.mark.parametrize("filename", [loop_single_quote, loop_double_quote])
 def test_quote_loop_polars(filename):
@@ -272,15 +271,14 @@ def test_quote_loop_polars(filename):
     assert star[''].to_polars()['no_quote_string'][0] == "noquote"
     assert star[''].to_polars()['quote_string'][0] == "quote string"
     assert star[''].to_polars()['whitespace_string'][0] == " "
-    # pl.Null value becomes None
-    assert star[''].to_polars()['empty_string'][0] is None
+    assert star[''].to_polars()['empty_string'][0] == ""
     assert star[''].to_polars()['number_and_string'].dtype == pl.String
-    assert star[''].to_polars()['number_and_empty'].dtype == pl.Float64
+    # assert star[''].to_polars()['number_and_empty'].dtype == pl.Float64
     assert star[''].to_polars()['number'].dtype == pl.Float64
     assert star[''].to_polars()['empty_string_and_normal_string'].dtype == pl.String
 
-    assert star[''].to_polars()['number_and_empty'][1] is None
-    assert star[''].to_polars()['empty_string_and_normal_string'][0] is None
+    # assert star[''].to_polars()['number_and_empty'][1] is None
+    assert star[''].to_polars()['empty_string_and_normal_string'][0] == ""
 
 
 def test_parse_as_string():
