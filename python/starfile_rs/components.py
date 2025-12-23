@@ -429,17 +429,6 @@ class LoopDataBlock(DataBlock):
         )
         return cls(rust_block)
 
-    @classmethod
-    def empty(cls, name: str, columns: list[str] | None = None) -> "LoopDataBlock":
-        """Create an empty LoopDataBlock with the given name and columns."""
-        rust_block = _rs.DataBlock.construct_loop_block(
-            name=name,
-            columns=columns or [],
-            content="",
-            nrows=0,
-        )
-        return cls(rust_block)
-
     def clone(self) -> "LoopDataBlock":
         """Create a clone of the LoopDataBlock."""
         new_block_rs = _rs.DataBlock.construct_loop_block(

@@ -131,6 +131,13 @@ def test_single_block_construction():
     assert isinstance(single := star.nth(-1), SingleDataBlock)
     assert single.to_list() == [("key1", 1), ("key2", 2.0), ("key3", "value")]
 
+    star["single_0"] = {"new_key": "new_value"}
+    assert list(star["single_0"]) == ["new_key"]
+
+    with pytest.raises(KeyError):
+        star["single_2"]
+
+
 def test_loop_block_construction():
     star = empty_star()
 
@@ -185,6 +192,11 @@ def test_loop_block_construction():
     assert "loop_4" not in star
     assert star_new["loop_4"].name == "loop_4"
     assert star_new["loop_4"].trust_loop().shape == (2, 2)
+
+    star_new["loop_5"] = star_new["loop_4"]
+    star_new["loop_5"] = star_new["loop_4"].trust_loop().to_pandas()
+    del star_new["loop_5"]
+    assert "loop_5" not in star_new
 
 def test_rename():
     data = """
@@ -288,6 +300,9 @@ def test_as_star_kwargs():
             {"b": {"x": 1}},
             block_1={"a": 1, "b": "text"},
         )
+    with pytest.raises(TypeError):
+        as_star()
+    assert isinstance(as_star(star), type(star))
 
 def test_clone():
     star = as_star(
@@ -309,3 +324,18 @@ def test_clone():
 def test_compat(path, tmpdir):
     star = compat.read(path)
     compat.write(star, tmpdir / "out.star")
+
+def test_ipython_methods():
+    star = as_star(
+        block_1={"a": 1, "b": "text"},
+        block_2=pd.DataFrame({"x": [0.1, 0.2], "y": ["p", "q"]}),
+    )
+    assert star._ipython_key_completions_() == ["block_1", "block_2"]
+    assert star.nth(0)._ipython_key_completions_() == ["a", "b"]
+    assert star.nth(1)._ipython_key_completions_() == ["x", "y"]
+
+def test_comment():
+    star = empty_star()
+    comment = "This is a comment line."
+    out = star.to_string(comment=comment)
+    assert out.startswith("# " + comment)

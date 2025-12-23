@@ -162,6 +162,12 @@ class StarDict(MutableMapping[str, "DataBlock"]):
         return self._blocks[key]
 
     def __setitem__(self, key, value) -> None:
+        """Set a block-like object as a data block in the STAR file.
+
+        DataFrame will be converted to LoopDataBlock, while dict-like objects are
+        assumed to be SingleDataBlock. To explicitly set the type of data block, use
+        `with_single_block()` or `with_loop_block()` methods.
+        """
         _set_single_or_double(self, key, value)
 
     def __delitem__(self, key: str) -> None:
@@ -313,7 +319,9 @@ def _is_scalar(obj: Any) -> bool:
 
 
 def _set_single_or_double(star: "StarDict", key: str, value: Any) -> None:
-    if isinstance(value, Mapping):
+    if isinstance(value, DataBlock):
+        star.with_block(value, inplace=True)
+    elif isinstance(value, Mapping):
         star.with_single_block(key, value, inplace=True)
     else:
         star.with_loop_block(key, value, inplace=True)
