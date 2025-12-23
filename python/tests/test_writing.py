@@ -1,8 +1,8 @@
 import time
 from pathlib import Path
-# import pytest
 from starfile_rs import read_star, empty_star, as_star
 import pandas as pd
+import polars as pl
 from .constants import loop_simple, postprocess, test_df
 from .utils import generate_large_star_file
 
@@ -132,3 +132,32 @@ def test_writing_speed(tmpdir):
 
 #     s = StarParser(filename)
 #     assert o == s.data_blocks[""]
+
+def test_empty_string_simple():
+    # empty strings should always be written as ''
+    star = empty_star()
+    star["simple"] = {
+        "a": "",
+        "b": "non-empty",
+        "c": ""
+    }
+    s0 = star.to_string(comment=None)
+    assert s0.strip() == (
+        'data_simple\n\n'
+        '_a ""\n'
+        '_b non-empty\n'
+        '_c ""'
+    )
+
+def test_empty_string_loop():
+    # empty strings should always be written as ''
+    star = empty_star()
+    star["pandas"] = pd.DataFrame({"a": ["", "non-empty"], "b": ["", ""]})
+    star["polars"] = pl.DataFrame({"a": ["", "non-empty"], "b": ["", ""]})
+    s0 = star.to_string(comment=None)
+    assert s0.strip() == (
+        'data_pandas\n\n'
+        'loop_\n_a #1\n_b #2\n""\t""\nnon-empty\t""\n\n\n'
+        'data_polars\n\n'
+        'loop_\n_a #1\n_b #2\n""\t""\nnon-empty\t""'
+    )

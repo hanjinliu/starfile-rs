@@ -1,6 +1,6 @@
+import csv
 from io import StringIO
 from abc import ABC, abstractmethod
-from csv import writer
 from typing import Any, Iterable, Iterator, TYPE_CHECKING, Literal, Mapping
 from starfile_rs import _starfile_rs_rust as _rs
 
@@ -314,20 +314,24 @@ class LoopDataBlock(DataBlock):
         float_precision: int = 6,
     ) -> "LoopDataBlock":
         """Create a LoopDataBlock from a pandas DataFrame."""
-        buf = StringIO()
-        df.to_csv(
-            buf,
+        # pandas to_csv does not quote empty string. This causes incorrect parsing
+        # when reading output star files by RELION.
+        df_replaced = df.where(df != "", '""')
+        out = df_replaced.to_csv(
             sep=separator,
             header=False,
             index=False,
-            na_rep="",
+            na_rep="<NA>",
+            quoting=csv.QUOTE_NONE,
+            quotechar='"',
             float_format=f"%.{float_precision}g",
+            lineterminator="\n",
         )
-        buf.seek(0)
+
         rust_block = _rs.DataBlock.construct_loop_block(
             name=name,
             columns=df.columns.tolist(),
-            content=buf.read(),
+            content=out,
             nrows=len(df),
         )
         return cls(rust_block)
@@ -342,19 +346,16 @@ class LoopDataBlock(DataBlock):
         float_precision: int = 6,
     ) -> "LoopDataBlock":
         """Create a LoopDataBlock from a polars DataFrame."""
-        buf = StringIO()
-        df.write_csv(
-            buf,
+        out = df.write_csv(
             separator=separator,
             include_header=False,
-            null_value='""',
+            null_value="<NA>",
             float_precision=float_precision,
         )
-        buf.seek(0)
         rust_block = _rs.DataBlock.construct_loop_block(
             name=name,
             columns=df.columns,
-            content=buf.read(),
+            content=out,
             nrows=len(df),
         )
         return cls(rust_block)
@@ -417,7 +418,7 @@ class LoopDataBlock(DataBlock):
             columns = [f"column_{i}" for i in range(len(data[0]))]
             it = data
         nrows = 0
-        w = writer(buf, delimiter=separator)
+        w = csv.writer(buf, delimiter=separator)
         for row in it:
             w.writerow([_python_obj_to_str(val) for val in row])
             nrows += 1
