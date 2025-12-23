@@ -7,13 +7,7 @@
 [![codecov](https://codecov.io/gh/hanjinliu/starfile-rs/graph/badge.svg?token=X1F259JYT5)](https://codecov.io/gh/hanjinliu/starfile-rs)
 
 
-A blazing-fast and type-safe STAR file reader and writer powered by Rust. This package implements interface with `pandas`/`polars` for modern data manipulation.
-
-```python
-from starfile_rs import read_star
-
-read_star("path/to/file.star")  # read as a dict-like object of data blocks
-```
+A blazing-fast and type-safe STAR file reader and writer powered by Rust (as a successor of [`starfile`](https://github.com/teamtomo/starfile)). This package implements interface with [`pandas`](https://github.com/pandas-dev/pandas), [`polars`](https://github.com/pola-rs/polars) and [`numpy`](https://github.com/numpy/numpy) for modern data manipulation.
 
 ## Installation
 
@@ -33,6 +27,34 @@ pip install -e .[polars]  # for polars support
 
 ## Highlights
 
+### Easy to Use
+
+`StarDict` provides a dict-like interface and each data block can be converted to/from popular data structures.
+
+```python
+from starfile_rs import read_star
+
+# read as a dict-like object of data blocks
+star = read_star("path/to/file.star")
+
+# convert the first data block to pandas.DataFrame
+star.nth(0).to_pandas()
+
+# convert the "particles" data block to polars.DataFrame
+star["particles"].to_polars()
+
+# trust the "general" data block is a single data block and convert to dict
+star["general"].trust_single().to_dict()
+
+# update or add a new loop data block
+import pandas as pd
+
+star.with_loop_block(
+    name="new_loop_data",
+    data=pd.DataFrame({"col1": [1, 2, 3], "col2": ["a", "b", "c"]}),
+)
+```
+
 ### Performance
 
 All the data are from [Burt et al.](https://zenodo.org/records/11068319)
@@ -47,7 +69,7 @@ All the data are from [Burt et al.](https://zenodo.org/records/11068319)
 
   ![](images/time-large-block.png)
 
-  Reading lines and whitespace trimming are performed in Rust. This speeds up the parsing significantly even though the table parsing is similarly done by `pandas`. If you use `polars.DataFrame`, the performance gain is more significant.
+  Reading lines and whitespace trimming are performed in Rust. This speeds up the parsing significantly even though the table parsing is similarly done by `pandas`. If you use `polars`, the performance gain is more significant.
 
 ### Type Safety
 

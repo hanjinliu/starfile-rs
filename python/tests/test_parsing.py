@@ -141,6 +141,9 @@ def test_read_block():
     s = read_star_block(postprocess, "fsc")
     assert isinstance(s, LoopDataBlock)
 
+    with pytest.raises(KeyError):
+        read_star_block(postprocess, "non_existent_block")
+
 
 def test_single_line_middle_of_multiblock():
     s = read_star(single_line_middle_of_multiblock)

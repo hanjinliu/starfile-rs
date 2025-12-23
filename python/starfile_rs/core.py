@@ -54,7 +54,7 @@ def empty_star() -> "StarDict":
 @overload
 def as_star(obj: Any) -> "StarDict": ...
 @overload
-def as_star(obj: Literal[None], **kwargs) -> "StarDict": ...
+def as_star(obj: Literal[None] = None, **kwargs) -> "StarDict": ...
 
 
 def as_star(obj=None, /, **kwargs) -> "StarDict":
@@ -186,8 +186,8 @@ class StarDict(MutableMapping[str, "DataBlock"]):
             d[name] = block.__class__.__name__
         return f"<{self.__class__.__name__} of blocks={d!r}>"
 
-    def rename(self, mapping: dict[str, str], inplace: bool = True) -> "StarDict":
-        """Rename data blocks in the STAR file.
+    def rename(self, mapping: dict[str, str]) -> "StarDict":
+        """Rename data blocks in the STAR file in place.
 
         The `name` attribute of each data block will also be updated.
 
@@ -205,12 +205,9 @@ class StarDict(MutableMapping[str, "DataBlock"]):
             block._rust_obj.set_name(new_name)
             new_blocks[new_name] = block
         new_names = list(new_blocks.keys())
-        if inplace:
-            self._blocks = new_blocks
-            self._names = new_names
-            return self
-        else:
-            return StarDict(new_blocks, new_names)
+        self._blocks = new_blocks
+        self._names = new_names
+        return self
 
     # mutable methods
     def with_block(

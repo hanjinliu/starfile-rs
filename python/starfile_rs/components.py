@@ -187,7 +187,7 @@ class SingleDataBlock(DataBlock, Mapping[str, Any]):
         """Create a clone of the SingleDataBlock."""
         new_block_rs = _rs.DataBlock.construct_single_block(
             name=self.name,
-            content=list(self._rust_obj.single_to_list()),
+            scalars=list(self._rust_obj.single_to_list()),
         )
         return SingleDataBlock(new_block_rs)
 

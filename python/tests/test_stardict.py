@@ -6,7 +6,7 @@ import pandas as pd
 import polars as pl
 
 from starfile_rs import read_star_text, SingleDataBlock, LoopDataBlock, compat
-from starfile_rs.core import empty_star
+from starfile_rs.core import as_star, empty_star
 from .constants import basic_single_quote, loop_double_quote, postprocess, rln31_style
 
 def test_repr():
@@ -176,6 +176,16 @@ def test_loop_block_construction():
     assert loop.columns == ["field1", "field2"]
     assert loop.shape == (3, 2)
 
+    # obj
+    star_new = star.with_loop_block(
+        name="loop_4",
+        data={"a": [True, False], "b": ["yes", "no"]},
+        inplace=False,
+    )
+    assert "loop_4" not in star
+    assert star_new["loop_4"].name == "loop_4"
+    assert star_new["loop_4"].trust_loop().shape == (2, 2)
+
 def test_rename():
     data = """
     data_A
@@ -199,6 +209,7 @@ def test_rename():
     assert list(star.keys()) == ["renamed_A", "renamed_B"]
     assert star["renamed_A"].name == "renamed_A"
     assert star["renamed_B"].name == "renamed_B"
+
 
 def test_rename_columns():
     data = """
@@ -254,6 +265,37 @@ def test_from_numpy_shape_check():
         LoopDataBlock.from_numpy("name", data, columns=["A", "B"])
     with pytest.raises(ValueError):
         LoopDataBlock.from_numpy("name", data[..., None], columns=["A", "B", "C"])
+
+def test_try_nth():
+    star = as_star({"a": pl.DataFrame({"x": [1, 2], "y": ["a", "b"]})})
+    star.nth(0)  # Should not raise
+    with pytest.raises(IndexError):
+        star.nth(1)
+    assert star.try_nth(1) is None
+    assert star.try_first() is not None
+
+def test_as_star_kwargs():
+    star = as_star(
+        block_1={"a": 1, "b": "text"},
+        block_2=pd.DataFrame({"x": [0.1, 0.2], "y": ["p", "q"]}),
+        block_3=pl.DataFrame({"m": [10, 20, 30], "n": [True, False, True]}),
+        block_4={"x": 1},
+    )
+    assert list(star.keys()) == ["block_1", "block_2", "block_3", "block_4"]
+    with pytest.raises(TypeError):
+        # cannot use both positional and keyword arguments
+        star = as_star(
+            {"b": {"x": 1}},
+            block_1={"a": 1, "b": "text"},
+        )
+
+def test_clone():
+    star = as_star(
+        block_1={"a": 1, "b": "text"},
+        block_2=pd.DataFrame({"x": [0.1, 0.2], "y": ["p", "q"]}),
+    )
+    assert star.nth(0).clone().columns == ["a", "b"]
+    assert star.nth(1).clone().columns == ["x", "y"]
 
 @pytest.mark.parametrize(
     "path",
