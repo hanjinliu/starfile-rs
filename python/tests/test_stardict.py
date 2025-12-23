@@ -6,7 +6,7 @@ import pandas as pd
 import polars as pl
 
 from starfile_rs import read_star_text, SingleDataBlock, LoopDataBlock, compat
-from starfile_rs.core import as_star, empty_star
+from starfile_rs.core import as_star, empty_star, _is_instance
 from .constants import basic_single_quote, loop_double_quote, postprocess, rln31_style
 
 def test_repr():
@@ -198,6 +198,9 @@ def test_loop_block_construction():
     del star_new["loop_5"]
     assert "loop_5" not in star_new
 
+    with pytest.raises(TypeError):
+        star_new.with_block(0)
+
 def test_rename():
     data = """
     data_A
@@ -323,6 +326,7 @@ def test_clone():
 )
 def test_compat(path, tmpdir):
     star = compat.read(path)
+    star = compat.read(path, read_n_blocks=1)
     compat.write(star, tmpdir / "out.star")
 
 def test_ipython_methods():
@@ -339,3 +343,15 @@ def test_comment():
     comment = "This is a comment line."
     out = star.to_string(comment=comment)
     assert out.startswith("# " + comment)
+
+def test_isinstance_check():
+    assert _is_instance(pd.DataFrame({"a": [1]}), "pandas", "DataFrame")
+    assert _is_instance(pl.DataFrame({"a": [1]}), "polars", "DataFrame")
+    assert _is_instance(np.array([1, 2, 3]), "numpy", "ndarray")
+
+def test_similar_types():
+    assert not _is_instance(pd.Series([1, 2, 3]), "pandas", "DataFrame")
+    class WeirdClass:
+        __module__ = 0  # wrong type
+
+    assert not _is_instance(WeirdClass(), "pandas", "DataFrame")

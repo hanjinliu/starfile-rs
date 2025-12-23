@@ -1,15 +1,17 @@
 """Compatibility layer for `starfile`."""
 
-import os
-from typing import Any
+from typing import Any, TYPE_CHECKING
 from starfile_rs.io import StarReader
 from starfile_rs.core import as_star
+
+if TYPE_CHECKING:
+    import os
 
 __all__ = ["read", "write"]
 
 
 def read(
-    filename: os.PathLike,
+    filename: "os.PathLike",
     read_n_blocks: int | None = None,
     always_dict: bool = False,
     parse_as_string: list[str] = [],
@@ -30,7 +32,7 @@ def read(
 
 def write(
     star_dict: Any,
-    filename: os.PathLike,
+    filename: "os.PathLike",
 ):
     """Write a STAR file from a StarDict-like object."""
 
