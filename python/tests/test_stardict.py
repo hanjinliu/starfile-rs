@@ -1,11 +1,43 @@
 import textwrap
 import pytest
 import numpy as np
+from numpy.testing import assert_allclose
 import pandas as pd
 import polars as pl
 
-from starfile_rs import read_star_text, SingleDataBlock, LoopDataBlock
+from starfile_rs import read_star_text, SingleDataBlock, LoopDataBlock, compat
 from starfile_rs.core import empty_star
+from .constants import basic_single_quote, loop_double_quote, postprocess, rln31_style
+
+def test_repr():
+    star_content = """
+    data_single
+    _item1 10
+    _item2 "example"
+
+    data_loop
+    loop_
+    _col1
+    _col2
+    1 "a"
+    2 "b"
+    3 "c"
+    """
+    star = read_star_text(textwrap.dedent(star_content))
+    assert "SingleDataBlock" in repr(star)
+    assert "LoopDataBlock" in repr(star)
+    single_block = star.first()
+    loop_block = star.nth(1)
+
+    single_repr = repr(single_block)
+    assert "SingleDataBlock" in single_repr
+    assert "item1" in single_repr
+    assert "item2" in single_repr
+    assert "10" in single_repr
+    assert "example" in single_repr
+
+    loop_repr = repr(loop_block)
+    assert "LoopDataBlock" in loop_repr
 
 def test_trust_and_try():
     star_content = """
@@ -35,11 +67,31 @@ def test_trust_and_try():
     with pytest.raises(ValueError):
         star.first().trust_loop(allow_conversion=False)
 
+def test_loop_to_single():
+    star_content = """
+    data_loop
+    loop_
+    _col1
+    _col2
+    1 a
+    """
+    star = read_star_text(textwrap.dedent(star_content))
+    loop_block = star.first()
+    assert isinstance(loop_block, LoopDataBlock)
+    assert isinstance(loop_block.try_single(), SingleDataBlock)
+    assert loop_block.try_single(False) is None
+    single_block = loop_block.trust_single()
+    with pytest.raises(ValueError):
+        loop_block.trust_single(False)
+    assert single_block.to_list() == [("col1", 1), ("col2", "a")]
+    assert single_block["col1"] == 1
+    assert single_block["col2"] == "a"
+
 def test_to_dataframe():
     star_content = """
     data_single
     _item1 10
-    _item2 "example"
+    _item2 example
 
     data_loop
     loop_
@@ -47,7 +99,7 @@ def test_to_dataframe():
     _col2
     _col3
     1 "a" -1.0
-    2 "b" 0.0
+    2 b 0.0
     3 "c" 1.2e-3
     """
 
@@ -177,3 +229,41 @@ def test_rename_columns():
     loop.columns = ["new_col1", "new_col2"]
     assert loop.columns == ["new_col1", "new_col2"]
     assert loop.to_polars().columns == ["new_col1", "new_col2"]
+
+def test_to_numeric_array():
+    data = """
+    data_
+    loop_
+    _X
+    _Y
+    1.0 2.0
+    3.0 4.0
+    5.0 6.0
+    """
+    star = read_star_text(textwrap.dedent(data))
+    arr = star.first().to_numpy()
+    assert isinstance(arr, np.ndarray)
+    assert arr.shape == (3, 2)
+    assert_allclose(arr, np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]))
+
+def test_from_numpy_shape_check():
+    data = np.array([[1, 2, 3], [4, 5, 6]])
+    LoopDataBlock.from_numpy("name", data)  # Should not raise
+    LoopDataBlock.from_numpy("name", data, columns=["A", "B", "C"])  # Should not raise
+    with pytest.raises(ValueError):
+        LoopDataBlock.from_numpy("name", data, columns=["A", "B"])
+    with pytest.raises(ValueError):
+        LoopDataBlock.from_numpy("name", data[..., None], columns=["A", "B", "C"])
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        basic_single_quote,
+        loop_double_quote,
+        postprocess,
+        rln31_style,
+    ]
+)
+def test_compat(path, tmpdir):
+    star = compat.read(path)
+    compat.write(star, tmpdir / "out.star")

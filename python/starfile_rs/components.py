@@ -1,4 +1,5 @@
 from io import StringIO
+from abc import ABC, abstractmethod
 from csv import writer
 from typing import Any, Iterable, Iterator, TYPE_CHECKING, Literal, Mapping
 from starfile_rs import _starfile_rs_rust as _rs
@@ -10,7 +11,7 @@ if TYPE_CHECKING:
     from typing import Self
 
 
-class DataBlock:
+class DataBlock(ABC):
     def __init__(self, obj: _rs.DataBlock, /) -> None:
         self._rust_obj = obj
 
@@ -119,13 +120,13 @@ class DataBlock:
         """Convert the data block to a numpy ndarray."""
         return self.trust_loop(True).to_numpy(structure_by=structure_by)
 
+    @abstractmethod
     def clone(self) -> "Self":
         """Create a clone of the DataBlock."""
-        raise NotImplementedError("Subclasses must implement clone() method.")
 
+    @abstractmethod
     def to_string(self) -> str:
         """Convert the data block to a string."""
-        raise NotImplementedError("Subclasses must implement to_string() method.")
 
 
 class SingleDataBlock(DataBlock, Mapping[str, Any]):

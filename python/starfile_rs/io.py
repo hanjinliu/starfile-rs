@@ -31,10 +31,3 @@ class StarReader:
                 yield LoopDataBlock(block)
             else:
                 yield SingleDataBlock(block)
-
-    def get_block(self, name: str) -> "DataBlock | None":
-        with self:
-            for block in self.iter_blocks():
-                if block.name == name:
-                    return block
-        return None
