@@ -162,6 +162,17 @@ def test_empty_string_loop():
         'loop_\n_a #1\n_b #2\n""\t""\nnon-empty\t""'
     )
 
+def test_pandas_mixed_types():
+    # pandas prefer object type, which causes issues when writing STAR files
+    star = empty_star()
+    star["pandas"] = pd.DataFrame({"a": [1, "a b", 3.0], "b": [0, 1, 2]})
+    s0 = star.to_string(comment=None)
+    assert s0.strip() == (
+        'data_pandas\n\n'
+        'loop_\n_a #1\n_b #2\n'
+        '1\t0\n"a b"\t1\n3.0\t2'
+    )
+
 def test_string_with_space_simple():
     # strings with spaces should always be quoted
     star = empty_star()
