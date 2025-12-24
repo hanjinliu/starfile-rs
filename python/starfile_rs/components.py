@@ -120,6 +120,11 @@ class DataBlock(ABC):
         """Convert the data block to a numpy ndarray."""
         return self.trust_loop(True).to_numpy(structure_by=structure_by)
 
+    def _repr_html_(self) -> str:
+        body = self._rust_obj.to_html(cell_style="padding: 4px;", max_lines=200)
+        title = f"<h4>{self.name}</h4>"
+        return title + body
+
     @abstractmethod
     def clone(self) -> "Self":
         """Create a clone of the DataBlock."""
