@@ -321,6 +321,7 @@ class LoopDataBlock(DataBlock):
             new_columns: "list[pd.Series]" = []
             for column_name in df.columns:
                 if (col := df[column_name]).dtype.kind not in "biuf":
+                    col = col.astype(str)
                     cond = col.str.contains(" ") | (col == "")
                     new_col = col.where(~cond, '"' + col + '"')
                     new_columns.append(new_col)
