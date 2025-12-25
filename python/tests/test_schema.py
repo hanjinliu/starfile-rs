@@ -1,3 +1,4 @@
+import sys
 from typing import TYPE_CHECKING
 import pandas as pd
 import polars as pl
@@ -116,7 +117,12 @@ def test_wrong_annotation():
             gen: int = Field("general")  # invalid
 
 def test_missing_annotation():
-    with pytest.raises(TypeError):
+    # NOTE: error in __set_name__ is redirected to RuntimeError in Python < 3.12
+    if sys.version_info < (3, 12):
+        exc_type = RuntimeError
+    else:
+        exc_type = TypeError
+    with pytest.raises(exc_type):
         class MyModel(StarModel):
             gen = Field()  # missing
 

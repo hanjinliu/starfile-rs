@@ -38,11 +38,28 @@ class LoopDataModel(LoopDataModelBase[pl.DataFrame]):
     def _get_dataframe(
         cls, block: LoopDataBlock, fields: list[LoopField]
     ) -> pl.DataFrame:
-        schema_overrides = {f.column_name: f._get_annotation_arg() for f in fields}
-        new_columns = list(schema_overrides.keys())
+        schema = {col: pl.String for col in block.columns}
+        new_columns: list[int] = []
+        for f in fields:
+            schema[f.column_name] = _type_to_schema(f._get_annotation_arg())
+            new_columns.append(f.column_name)
         columns = [block.columns.index(name) for name in new_columns]
         return block.trust_loop()._to_polars_impl(
             columns=columns,
             new_columns=new_columns,
-            schema_overrides=schema_overrides,
+            schema=schema,
+            infer_schema=False,
         )
+
+
+def _type_to_schema(typ):
+    if typ is int:
+        return pl.Int64
+    elif typ is float:
+        return pl.Float64
+    elif typ is str:
+        return pl.String
+    elif typ is bool:
+        return pl.Boolean
+    else:
+        return typ  # just trust polars to handle it
