@@ -292,7 +292,7 @@ def test_parse_as_string():
 
     # check 'rlnResolution' is parsed as string in fsc (loop) block
     df_pd = star['fsc'].to_pandas(string_columns=string_columns)
-    assert df_pd['rlnResolution'].dtype == object
+    assert df_pd['rlnResolution'].dtype == "string"
 
     # check 'rlnResolution' is parsed as string in fsc (loop) block
     df_pl = star['fsc'].to_polars(string_columns=string_columns)
