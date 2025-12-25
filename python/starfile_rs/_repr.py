@@ -6,11 +6,9 @@ if TYPE_CHECKING:
     from starfile_rs.core import StarDict
 
 
-def html_block(star: StarDict, max_blocks: int | None = None) -> str:
+def html_block(star: StarDict, max_blocks: int = 20000) -> str:
     """Generate HTML representation for a single data block."""
     html_parts = []
-    if max_blocks is None:
-        max_blocks = len(star)
     for i_block, (name, block) in enumerate(star.items()):
         block_html = block._rust_obj.to_html(cell_style="padding: 4px;", max_lines=60)
         html_parts.append(_SECTION_FORMAT.format(name=name, block_html=block_html))
