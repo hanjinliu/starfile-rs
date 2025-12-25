@@ -27,13 +27,17 @@ class Field:
         self._annotation: Any | None = None
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}(name={self.attribute_name!r}, annotation={self._annotation!r})"
+        return f"{type(self).__name__}(name={self._field_name!r}, annotation={self.annotation!r})"
 
     def normalize_value(self, value: Any) -> Any:
-        return self._validate_value(self._annotation, value)
+        return self._validate_value(self.annotation, value)
 
     def _validate_value(self, annotation: Any, value: Any) -> Any:
-        raise ValueError(f"Field {self.attribute_name!r} has no validation implemented")
+        """Validate and possibly convert the value according to the annotation."""
+        # this method should be overridden in subclasses. Note that Field itself should
+        # not be an ABC, because it will be instantiated temporarily before being
+        # converted to a BlockField, SingleField, or LoopField.
+        raise NotImplementedError  # pragma: no cover
 
     @classmethod
     def _from_field(
@@ -43,22 +47,20 @@ class Field:
     ) -> Self:
         self = cls(field._star_name)
         if annotation is None:
-            raise ValueError(
-                f"Field {field.attribute_name!r} requires a type annotation"
-            )
+            raise ValueError(f"Field {field._field_name!r} requires a type annotation")
         self._annotation = annotation
         self._field_name = field._field_name
         return self
-
-    @property
-    def attribute_name(self) -> str:
-        return self._field_name
 
     @property
     def annotation(self) -> Any:
         return self._annotation
 
     def __set_name__(self, owner: type[LoopDataModel], name: str) -> None:
+        if name not in owner.__annotations__:
+            raise TypeError(
+                f"Field '{name}' in {owner.__name__} must have a type annotation"
+            )
         self._field_name = name
         if self._star_name is None:
             self._star_name = name
@@ -96,6 +98,11 @@ class BlockField(Field):
         return self._star_name
 
     def _validate_value(self, annotation: type[BaseBlockModel], value: DataBlock):
+        if not hasattr(annotation, "__starfile_fields__"):
+            raise TypeError(
+                "BlockField annotation must be a subclass of BaseBlockModel, "
+                f"got {annotation}"
+            )
         return annotation.validate_block(value)
 
 

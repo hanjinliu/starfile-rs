@@ -12,6 +12,11 @@ from starfile_rs.schema import (
 )
 from .constants import test_data_directory
 
+class General(SingleDataModel):
+    final_res: float = Field("rlnFinalResolution")
+    rlnMaskName: str = Field()  # test default name
+    randomise_from: str = Field("rlnRandomiseFrom")  # test force str
+
 @pytest.mark.parametrize(
     "loopDataModel, series, mod_",
     [
@@ -31,11 +36,6 @@ def test_construction(
         LoopDataModel = loopDataModel
         Series = series
         mod = mod_
-
-    class General(SingleDataModel):
-        final_res: float = Field("rlnFinalResolution")
-        rlnMaskName: str = Field()  # test default name
-        randomise_from: str = Field("rlnRandomiseFrom")  # test force str
 
     class Fsc(LoopDataModel):
         rlnAngstromResolution: Series[str] = Field()
@@ -78,11 +78,6 @@ def test_validation_missing_column(
         LoopDataModel = loopDataModel
         Series = series
 
-    class General(SingleDataModel):
-        final_res: float = Field("rlnFinalResolution")
-        rlnMaskName: str = Field()  # test default name
-        randomise_from: str = Field("rlnRandomiseFrom")  # test force str
-
     class GeneralLoop(LoopDataModel):
         final_res: Series[float] = Field("rlnFinalResolution")
         rlnMaskName: Series[str] = Field()  # test default name
@@ -113,3 +108,40 @@ def test_validation_missing_column(
         MyModel_1.validate_file(test_data_directory / "basic_block.star")
     with pytest.raises(ValidationError):
         MyModel_2.validate_file(test_data_directory / "basic_block.star")
+
+def test_wrong_annotation():
+    with pytest.raises(TypeError):
+        # error raised on definition
+        class MyModel(StarModel):
+            gen: int = Field("general")  # invalid
+
+def test_missing_annotation():
+    with pytest.raises(TypeError):
+        class MyModel(StarModel):
+            gen = Field()  # missing
+
+def test_other_class_var_allowed():
+    class MyModel(StarModel):
+        gen: General = Field("general")
+        some_class_var = 42  # allowed
+
+    m = MyModel.validate_file(test_data_directory / "basic_block.star")
+    assert m.gen.final_res == pytest.approx(16.363636)
+    assert m.some_class_var == 42
+
+def test_repr():
+    from starfile_rs.schema.pandas import LoopDataModel, StarModel, Field, Series
+
+    class Fsc(LoopDataModel):
+        rlnAngstromResolution: Series[str] = Field()
+        fsc_corrected: Series[float] = Field("rlnFourierShellCorrelationCorrected")
+
+    class MyModel(StarModel):
+        general: General = Field()
+        fsc: Fsc = Field()
+
+    m = MyModel.validate_file(test_data_directory / "basic_block.star")
+    assert MyModel.general is m.__starfile_fields__["general"]
+    assert MyModel.fsc is m.__starfile_fields__["fsc"]
+    repr(MyModel.general)
+    repr(MyModel.fsc)
