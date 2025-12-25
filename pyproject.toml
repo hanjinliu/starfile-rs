@@ -9,8 +9,19 @@ classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 dynamic = ["version"]
+
+[project.urls]
+Documentation = "https://github.com/hanjinliu/starfile-rs#readme"
+Issues = "https://github.com/hanjinliu/starfile-rs/issues"
+Source = "https://github.com/hanjinliu/starfile-rs"
+
 [project.optional-dependencies]
 testing = [
     "pytest",
@@ -29,6 +40,7 @@ polars = [
 numpy = [
     "numpy>=1.24.0",
 ]
+
 [tool.maturin]
 python-source = "python"
 features = ["pyo3/extension-module"]

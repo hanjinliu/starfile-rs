@@ -385,3 +385,10 @@ def test_html():
     assert "94" in html_loop
     assert "aaaa" in html_loop
     assert "bbbbb" in html_loop
+
+def test_very_long_html():
+    from starfile_rs import _repr
+    star = empty_star()
+    for i in range(200):
+        star.with_single_block(name=f"block_{i}", data={"key": i})
+    _repr.html_block(star, max_blocks=100)  # Should not raise
