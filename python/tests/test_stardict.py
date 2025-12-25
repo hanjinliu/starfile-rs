@@ -355,3 +355,40 @@ def test_similar_types():
         __module__ = 0  # wrong type
 
     assert not _is_instance(WeirdClass(), "pandas", "DataFrame")
+
+def test_html():
+    star = as_star(
+        single_block={"key1": 42, "key2": "some_value"},
+        loop_block=pd.DataFrame({"col1": [164, 294], "col2": ["aaaa", "bbbbb"]}),
+    )
+    html_output = star._repr_html_()
+    assert "key1" in html_output
+    assert "key2" in html_output
+    assert "col1" in html_output
+    assert "col2" in html_output
+    assert "42" in html_output
+    assert "some_value" in html_output
+    assert "164" in html_output
+    assert "294" in html_output
+    assert "aaaa" in html_output
+    assert "bbbbb" in html_output
+
+    html_single = star["single_block"].trust_single()._repr_html_()
+    html_loop = star["loop_block"].trust_loop()._repr_html_()
+    assert "key1" in html_single
+    assert "key2" in html_single
+    assert "col1" in html_loop
+    assert "col2" in html_loop
+    assert "42" in html_single
+    assert "some_value" in html_single
+    assert "164" in html_loop
+    assert "94" in html_loop
+    assert "aaaa" in html_loop
+    assert "bbbbb" in html_loop
+
+def test_very_long_html():
+    from starfile_rs import _repr
+    star = empty_star()
+    for i in range(200):
+        star.with_single_block(name=f"block_{i}", data={"key": i})
+    _repr.html_block(star, max_blocks=100)  # Should not raise

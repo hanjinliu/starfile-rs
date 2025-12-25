@@ -13,6 +13,7 @@ from typing import (
 )
 from starfile_rs.io import StarReader
 from starfile_rs.components import DataBlock, SingleDataBlock, LoopDataBlock
+from starfile_rs import _repr
 
 if TYPE_CHECKING:
     from typing import TypeGuard
@@ -22,7 +23,7 @@ if TYPE_CHECKING:
     import polars as pl
 
 
-def read_star(path: "os.PathLike") -> "StarDict":
+def read_star(path: "str | os.PathLike") -> "StarDict":
     """Read a STAR file and return its contents as a StarFileData object."""
     return StarDict.from_star(path)
 
@@ -118,6 +119,9 @@ class StarDict(MutableMapping[str, "DataBlock"]):
 
     def _ipython_key_completions_(self) -> list[str]:
         return self._names
+
+    def _repr_html_(self) -> str:
+        return _repr.html_block(self)
 
     @classmethod
     def from_star(cls, path: "os.PathLike") -> "StarDict":

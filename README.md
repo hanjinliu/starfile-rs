@@ -65,7 +65,7 @@ All the data are from [Burt et al.](https://zenodo.org/records/11068319)
 
   `starfile-rs` does not parse string to `pandas.DataFrame` until you call `.to_pandas()`, so it is extremely fast for random access in a large STAR file compared to [`starfile`](https://github.com/teamtomo/starfile).
 
-- **Example 2**: Parsing a 12 MB data block (The "particles" block from `"Refine3D/bin6/run_it000_data.star"`).
+- **Example 2**: Parsing a 12 MB data block (The "particles" block from `Refine3D/bin6/run_it000_data.star`).
 
   ![](images/time-large-block.png)
 

@@ -229,6 +229,51 @@ impl DataBlock {
             )),
         }
     }
+
+    pub fn to_html(&self, cell_style: &str, max_lines: usize) -> PyResult<String> {
+        match &self.block_type {
+            BlockData::Loop(loop_data) => {
+                let mut html = String::new();
+                html.push_str("<table>\n<tr>");
+                for col in &loop_data.columns {
+                    html.push_str(&format!("<th style=\"{}\">{}</th>", cell_style, col));
+                }
+                html.push_str("</tr>\n");
+                for (ith, line) in loop_data.content.lines().enumerate() {
+                    html.push_str("<tr>");
+                    for value in line.split_whitespace() {
+                        html.push_str(&format!("<td style=\"{}\">{}</td>", cell_style, value));
+                    }
+                    html.push_str("</tr>\n");
+                    if ith + 1 >= max_lines {
+                        html.push_str(&format!(
+                            "<tr><td colspan=\"{}\" style=\"{}\">... (truncated)</td></tr>\n",
+                            loop_data.columns.len(),
+                            cell_style
+                        ));
+                        break;
+                    }
+                }
+                html.push_str("</table>");
+                Ok(html)
+            }
+            BlockData::Simple(scalars) => {
+                let mut html = String::new();
+                html.push_str("<table>\n");
+                for scalar in scalars {
+                    html.push_str(&format!(
+                        "<tr><th style=\"{}\">{}</th><td style=\"{}\">{}</td></tr>\n",
+                        cell_style, scalar.name, cell_style, scalar.value
+                    ));
+                }
+                html.push_str("</table>");
+                Ok(html)
+            }
+            BlockData::EOF => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "EOF block cannot be converted to HTML",
+            )),
+        }
+    }
 }
 
 pub enum BlockData {
