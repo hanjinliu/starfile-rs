@@ -232,27 +232,29 @@ class LoopDataBlock(DataBlock):
         string_columns: list[str] = [],
     ) -> "pd.DataFrame":
         """Convert the data block to a pandas DataFrame."""
-        import pandas as pd
-
         if string_columns:
-            dtype = {col: str for col in string_columns}
+            dtype = {col: "string" for col in string_columns}
         else:
             dtype = None
+        return self._to_pandas_impl(dtype=dtype, names=self.columns)
+
+    def _to_pandas_impl(self, **kwargs) -> "pd.DataFrame":
+        """Convert the data block to a pandas DataFrame."""
+        import pandas as pd
+
         # NOTE: converting multiple whitespaces to a single space for pandas read_csv
         # performs better
         sep = " "
-        df = pd.read_csv(
+        return pd.read_csv(
             self._as_buf(sep),
-            dtype=dtype,
             delimiter=sep,
-            names=self.columns,
             header=None,
             comment="#",
             keep_default_na=False,
             na_values=_NAN_STRINGS,
             engine="c",
+            **kwargs,
         )
-        return df
 
     def to_polars(
         self,
@@ -265,6 +267,14 @@ class LoopDataBlock(DataBlock):
             schema_overrides = {col: pl.String for col in string_columns}
         else:
             schema_overrides = None
+        return self._to_polars_impl(
+            schema_overrides=schema_overrides, new_columns=self.columns
+        )
+
+    def _to_polars_impl(self, **kwargs) -> "pl.DataFrame":
+        """Convert the data block to a polars DataFrame."""
+        import polars as pl
+
         sep = " "
         return pl.read_csv(
             self._as_buf(sep),
@@ -272,8 +282,7 @@ class LoopDataBlock(DataBlock):
             has_header=False,
             comment_prefix="#",
             null_values=_NAN_STRINGS,
-            new_columns=self.columns,
-            schema_overrides=schema_overrides,
+            **kwargs,
         )
 
     def to_numpy(
