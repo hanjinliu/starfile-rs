@@ -42,9 +42,6 @@ class StarModel(_SchemaBase):
     def __init__(self, block_models: dict[str, BaseBlockModel]):
         self._block_models = block_models
 
-    def get_block(self, name: str) -> DataBlock:
-        return self._block_models[name]._block
-
     def __init_subclass__(cls):
         schema_fields: dict[str, Field] = {}
         for name, annot in get_type_hints(cls).items():

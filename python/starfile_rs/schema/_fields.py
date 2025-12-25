@@ -85,8 +85,8 @@ class BlockField(Field):
     ) -> BlockField | BaseBlockModel:
         if instance is None:
             return self
-        block = instance.get_block(self.block_name)
-        return self.normalize_value(block)
+        model = instance._block_models[self.block_name]
+        return model
 
     @property
     def block_name(self) -> str:

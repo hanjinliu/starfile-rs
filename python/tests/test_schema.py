@@ -56,9 +56,9 @@ def test_construction(
     assert m.fsc.dataframe.shape == (49, 2)
     assert m.fsc._dataframe_cache is not None
     assert isinstance(m.fsc.rlnAngstromResolution, mod.Series)
-    assert m.fsc.rlnAngstromResolution.dtype == "string"
+    assert isinstance(m.fsc.rlnAngstromResolution[0], str)
     assert isinstance(m.fsc.fsc_corrected, mod.Series)
-    assert m.fsc.fsc_corrected.dtype == float
+    assert isinstance(m.fsc.fsc_corrected[0], float)
 
 
 @pytest.mark.parametrize(
