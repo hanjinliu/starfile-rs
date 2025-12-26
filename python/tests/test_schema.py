@@ -175,6 +175,29 @@ def test_field_default():
     )
     assert m.optional_field.some_value is None
 
+def test_field_default_loop():
+    from starfile_rs.schema.pandas import LoopDataModel, Series
+
+    class Block0(LoopDataModel):
+        a: Series[int] = Field(name="A")
+        b: Series[float] = Field(name="B", default=None)
+
+    class MyModel(StarModel):
+        block_0: Block0 = Field()
+
+    m = MyModel.validate_dict(
+        {
+            "block_0": {
+                "A": [1, 2, 3],
+            }
+        }
+    )
+    df = m.block_0.dataframe
+    assert "A" in df.columns
+    assert "B" not in df.columns
+    assert m.block_0.b is None
+    assert df["A"].tolist() == [1, 2, 3]
+
 
 def test_repr():
     from starfile_rs.schema.pandas import LoopDataModel, StarModel, Field, Series
