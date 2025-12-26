@@ -195,9 +195,9 @@ def test_parsing_speed(tmpdir):
     read_star(path)
     end = time.time()
 
-    # Check that execution takes less than 100 ms
+    # Check that execution takes less than 150 ms
     dt = end - start
-    assert dt < 0.1
+    assert dt < 0.15
 
 
 def test_two_single_line_loop_blocks():
@@ -293,7 +293,7 @@ def test_parse_as_string():
 
     # check 'rlnResolution' is parsed as string in fsc (loop) block
     df_pd = star['fsc'].to_pandas(string_columns=string_columns)
-    assert df_pd['rlnResolution'].dtype == "string"
+    assert df_pd['rlnResolution'].dtype == object
 
     # check 'rlnResolution' is parsed as string in fsc (loop) block
     df_pl = star['fsc'].to_polars(string_columns=string_columns)

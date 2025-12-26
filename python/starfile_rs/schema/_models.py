@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import enum
 from io import TextIOBase
 from pathlib import Path
+from types import MappingProxyType
 from typing import (
     Any,
     Generic,
+    Literal,
     Mapping,
     TYPE_CHECKING,
     TypeVar,
@@ -26,12 +29,21 @@ if TYPE_CHECKING:
     from typing import Self
 
 
+class Extra(enum.Enum):
+    ALLOW = "allow"
+    FORBID = "forbid"
+    IGNORE = "ignore"
+
+
+ExtraType = Literal["allow", "forbid", "ignore"]
+
+
 class _SchemaBase:
-    __starfile_fields__: dict[str, Field]
+    __starfile_fields__: MappingProxyType[str, Field]
 
     def __repr__(self) -> str:
         field_reprs = []
-        for name, field in self.__starfile_fields__.items():
+        for name in self.__starfile_fields__.keys():
             value = getattr(self, name)
             field_reprs.append(f"{name}={value!r}")
         fields_str = ", ".join(field_reprs)
@@ -41,13 +53,13 @@ class _SchemaBase:
 class StarModel(_SchemaBase):
     """Base class for STAR file schema models."""
 
-    __starfile_fields__: dict[str, BlockField]
-    __starfile_read_all__: bool = False
+    __starfile_fields__: MappingProxyType[str, BlockField]
+    __starfile_extra__: Extra
 
     def __init__(self, block_models: dict[str, BaseBlockModel]):
         self._block_models = block_models
 
-    def __init_subclass__(cls, read_all: bool = False):
+    def __init_subclass__(cls, extra: ExtraType = "ignore"):
         schema_fields: dict[str, Field] = {}
         for name, annot in get_type_hints(cls).items():
             if name in StarModel.__annotations__:
@@ -62,8 +74,8 @@ class StarModel(_SchemaBase):
                 schema_fields[name] = new_field
                 setattr(cls, name, new_field)
 
-        cls.__starfile_fields__ = schema_fields
-        cls.__starfile_read_all__ = bool(read_all)
+        cls.__starfile_fields__ = MappingProxyType(schema_fields)
+        cls.__starfile_extra__ = Extra(extra)
 
     @classmethod
     def validate_dict(cls, star: Mapping[str, Any]) -> Self:
@@ -97,13 +109,20 @@ class StarModel(_SchemaBase):
                 f"StarModel {cls.__name__} is missing required fields: {', '.join(missing)}"
             )
         if star:
-            if not cls.__starfile_read_all__:
+            if cls.__starfile_extra__ is Extra.FORBID:
                 unexpected = ", ".join(star.keys())
                 raise ValidationError(
                     f"StarModel {cls.__name__} got unexpected blocks: {unexpected}"
                 )
-            for name, block in star.items():
-                star_input[name] = AnyBlock(block)
+            elif cls.__starfile_extra__ is Extra.IGNORE:
+                pass
+            elif cls.__starfile_extra__ is Extra.ALLOW:
+                for name, block in star.items():
+                    try:
+                        block = SingleDataBlock._from_any(name, block)
+                    except Exception:
+                        block = LoopDataBlock._from_any(name, block)
+                    star_input[name] = AnyBlock(block)
 
         # Sort star_input by the order of input star. This is important to keep the
         # order of blocks when writing back to file.
@@ -119,7 +138,7 @@ class StarModel(_SchemaBase):
             if (name := block.name) in required:
                 mapping[name] = block
                 required.remove(name)
-            if not required and not cls.__starfile_read_all__:
+            if not required and not cls.__starfile_extra__:
                 break
         # NOTE: we do not check if required is empty here, because validate_dict will
         # do that.
@@ -147,7 +166,7 @@ class StarModel(_SchemaBase):
 
 
 class BaseBlockModel(_SchemaBase):
-    __starfile_fields__: dict[str, _BlockComponentField]
+    __starfile_fields__: MappingProxyType[str, _BlockComponentField]
 
     def __init__(self, block: DataBlock):
         self._block = block
@@ -186,8 +205,15 @@ class BaseBlockModel(_SchemaBase):
 class AnyBlock(BaseBlockModel):
     """Class used for accepting any DataBlock without validation.
 
-    Usually used for read_all=True situations in StarModel.
+    Usually used for extra="allow" situations in StarModel.
     """
+
+    __starfile_fields__ = MappingProxyType({})
+
+    @property
+    def block(self) -> DataBlock:
+        """Return the underlying DataBlock."""
+        return self._block
 
 
 _DF = TypeVar("_DF")
@@ -196,7 +222,7 @@ _DF = TypeVar("_DF")
 class LoopDataModel(BaseBlockModel, Generic[_DF]):
     """Schema model for a loop data block."""
 
-    __starfile_fields__: dict[str, LoopField]
+    __starfile_fields__: MappingProxyType[str, LoopField]
     _series_class: type
     _block: LoopDataBlock
 
@@ -217,7 +243,8 @@ class LoopDataModel(BaseBlockModel, Generic[_DF]):
                 new_field = LoopField._from_field(field, annot)
                 schema_fields[name] = new_field
                 setattr(cls, name, new_field)
-        cls.__starfile_fields__ = schema_fields
+
+        cls.__starfile_fields__ = MappingProxyType(schema_fields)
 
     def __repr__(self) -> str:
         field_reprs = []
@@ -263,7 +290,7 @@ class LoopDataModel(BaseBlockModel, Generic[_DF]):
 class SingleDataModel(BaseBlockModel):
     """Schema model for a single data block."""
 
-    __starfile_fields__: dict[str, SingleField]
+    __starfile_fields__: MappingProxyType[str, SingleField]
 
     def __init_subclass__(cls):
         schema_fields: dict[str, Field] = {}
@@ -273,7 +300,8 @@ class SingleDataModel(BaseBlockModel):
                 new_field = SingleField._from_field(field, annot)
                 schema_fields[name] = new_field
                 setattr(cls, name, new_field)
-        cls.__starfile_fields__ = schema_fields
+
+        cls.__starfile_fields__ = MappingProxyType(schema_fields)
 
     @classmethod
     def validate_block(cls, value: Any) -> Self:
