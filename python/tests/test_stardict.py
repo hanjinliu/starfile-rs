@@ -6,7 +6,8 @@ import pandas as pd
 import polars as pl
 
 from starfile_rs import read_star_text, SingleDataBlock, LoopDataBlock, compat
-from starfile_rs.core import as_star, empty_star, _is_instance
+from starfile_rs.core import as_star, empty_star
+from starfile_rs.components import _is_instance
 from .constants import basic_single_quote, loop_double_quote, postprocess, rln31_style
 
 def test_repr():

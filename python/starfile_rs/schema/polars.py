@@ -18,15 +18,15 @@ _T = TypeVar("_T")
 
 if TYPE_CHECKING:
 
-    class pl_Series(pl.Series, Generic[_T]):
+    class PolarsSeries(pl.Series, Generic[_T]):
         @overload
         def __getitem__(self, key: SupportsIndex) -> _T: ...
         @overload
-        def __getitem__(self, key: slice) -> pl_Series[_T]: ...
+        def __getitem__(self, key: slice) -> pl.Series[_T]: ...
 
 
 class Series(SeriesBase[_T]):
-    def __get__(self, instance, owner) -> pl_Series[_T]:
+    def __get__(self, instance, owner) -> PolarsSeries[_T]:
         return self
 
 

@@ -1,3 +1,4 @@
+from importlib import import_module
 import csv
 from io import StringIO
 from abc import ABC, abstractmethod
@@ -8,7 +9,7 @@ if TYPE_CHECKING:
     import numpy as np
     import pandas as pd
     import polars as pl
-    from typing import Self
+    from typing import Self, TypeGuard
 
 
 class DataBlock(ABC):
@@ -170,6 +171,26 @@ class SingleDataBlock(DataBlock, Mapping[str, Any]):
             scalars=str_data,
         )
         return cls(rust_block)
+
+    @classmethod
+    def _from_any(
+        cls,
+        name: str,
+        data: Any,
+    ) -> "SingleDataBlock":
+        if _is_pandas_dataframe(data):
+            block = LoopDataBlock.from_pandas(
+                name, data, quote_unsafe=False
+            ).trust_single()
+        elif _is_polars_dataframe(data):
+            block = LoopDataBlock.from_polars(
+                name, data, quote_unsafe=False
+            ).trust_single()
+        elif _is_numpy_array(data):
+            block = LoopDataBlock.from_numpy(name, data).trust_single()
+        else:
+            block = SingleDataBlock.from_iterable(name, data)
+        return block
 
     def to_dict(
         self,
@@ -477,6 +498,37 @@ class LoopDataBlock(DataBlock):
         )
         return cls(rust_block)
 
+    @classmethod
+    def _from_any(
+        cls,
+        name: str,
+        data: Any,
+        separator: str = "\t",
+        float_precision: int = 6,
+        quote_unsafe: bool = False,
+    ) -> "LoopDataBlock":
+        if _is_pandas_dataframe(data):
+            block = LoopDataBlock.from_pandas(
+                name,
+                data,
+                quote_unsafe=quote_unsafe,
+                separator=separator,
+                float_precision=float_precision,
+            )
+        elif _is_polars_dataframe(data):
+            block = LoopDataBlock.from_polars(
+                name,
+                data,
+                quote_unsafe=quote_unsafe,
+                separator=separator,
+                float_precision=float_precision,
+            )
+        elif _is_numpy_array(data):
+            block = LoopDataBlock.from_numpy(name, data)
+        else:
+            block = LoopDataBlock.from_obj(name, data)
+        return block
+
     def clone(self) -> "LoopDataBlock":
         """Create a clone of the LoopDataBlock."""
         new_block_rs = _rs.DataBlock.construct_loop_block(
@@ -516,3 +568,27 @@ def _python_obj_to_str(value: Any) -> str:
                 return value
             return f'"{value}"'
     return str(value)
+
+
+def _is_pandas_dataframe(obj: Any) -> "TypeGuard[pd.DataFrame]":
+    return _is_instance(obj, "pandas", "DataFrame")
+
+
+def _is_polars_dataframe(obj: Any) -> "TypeGuard[pl.DataFrame]":
+    return _is_instance(obj, "polars", "DataFrame")
+
+
+def _is_numpy_array(obj: Any) -> "TypeGuard[np.ndarray]":
+    return _is_instance(obj, "numpy", "ndarray")
+
+
+def _is_instance(obj, mod: str, cls_name: str):
+    if not isinstance(obj_mod := getattr(type(obj), "__module__", None), str):
+        return False
+    if obj_mod.split(".")[0] != mod:
+        return False
+    if obj.__class__.__name__ != cls_name:
+        return False
+    imported_mod = import_module(mod)
+    cls = getattr(imported_mod, cls_name)
+    return isinstance(obj, cls)
