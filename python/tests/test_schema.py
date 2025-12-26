@@ -97,18 +97,17 @@ def test_validation_missing_column(
 
     class MyModel_1(StarModel):
         gen: General = Field("general")
-        fsc: FscSingle = Field()
+        fsc: FscSingle = Field()  # not a single block
 
     class MyModel_2(StarModel):
-        gen: GeneralLoop = Field("general")
+        gen: GeneralLoop = Field("general")  # single -> loop is allowed
         fsc: Fsc = Field()
 
     with pytest.raises(ValidationError):
         MyModel_0.validate_file(test_data_directory / "basic_block.star")
     with pytest.raises(ValidationError):
         MyModel_1.validate_file(test_data_directory / "basic_block.star")
-    with pytest.raises(ValidationError):
-        MyModel_2.validate_file(test_data_directory / "basic_block.star")
+    MyModel_2.validate_file(test_data_directory / "basic_block.star")
 
 def test_wrong_annotation():
     with pytest.raises(TypeError):
@@ -134,6 +133,48 @@ def test_other_class_var_allowed():
     m = MyModel.validate_file(test_data_directory / "basic_block.star")
     assert m.gen.final_res == pytest.approx(16.363636)
     assert m.some_class_var == 42
+
+def test_field_default():
+    class OptionalField(SingleDataModel):
+        some_value: float = Field(default=None)
+
+    class MyModel(StarModel):
+        gen: General = Field("general")
+        optional_field: OptionalField = Field(default=None)
+
+    m = MyModel.validate_file(test_data_directory / "basic_block.star")
+    assert m.gen.final_res == pytest.approx(16.363636)
+    assert m.optional_field is None
+
+    with pytest.raises(TypeError):
+        OptionalField.validate_block({"some_value": 3.14})
+    m = MyModel.validate_dict(
+        {
+            "general": {
+                "rlnFinalResolution": 10,
+                "rlnMaskName": "mask.mrc",
+                "rlnRandomiseFrom": "0",
+            },
+            "optional_field": {
+                "some_value": -1.2
+            },
+        }
+    )
+    assert m.optional_field.some_value == -1.2
+    m = MyModel.validate_dict(
+        {
+            "general": {
+                "rlnFinalResolution": 10,
+                "rlnMaskName": "mask.mrc",
+                "rlnRandomiseFrom": "0",
+            },
+            "optional_field": {
+                "other_value": -1.2
+            },
+        }
+    )
+    assert m.optional_field.some_value is None
+
 
 def test_repr():
     from starfile_rs.schema.pandas import LoopDataModel, StarModel, Field, Series

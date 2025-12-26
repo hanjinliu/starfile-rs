@@ -50,9 +50,9 @@ class Field:
         return f"{type(self).__name__}(name={self._field_name!r}, annotation={self.annotation!r})"
 
     def normalize_value(self, value: Any) -> Any:
-        return self._validate_value(self.annotation, value)
+        return self._validate_value(self._star_name, self.annotation, value)
 
-    def _validate_value(self, annotation: Any, value: Any) -> Any:
+    def _validate_value(self, name: str, annotation: Any, value: Any) -> Any:
         """Validate and possibly convert the value according to the annotation."""
         # this method should be overridden in subclasses. Note that Field itself should
         # not be an ABC, because it will be instantiated temporarily before being
@@ -135,7 +135,9 @@ class BlockField(Field):
             raise ValueError("Field name is not set")
         return self._star_name
 
-    def _validate_value(self, annotation: type[BaseBlockModel], value: DataBlock):
+    def _validate_value(
+        self, name: str, annotation: type[BaseBlockModel], value: DataBlock
+    ):
         if not hasattr(annotation, "__starfile_fields__"):
             raise TypeError(
                 "BlockField annotation must be a subclass of BaseBlockModel, "
@@ -154,7 +156,9 @@ class _BlockComponentField(Field):
 
 
 class LoopField(_BlockComponentField):
-    def _validate_value(self, annotation: SeriesBase[_T], value: Any) -> SeriesBase[_T]:
+    def _validate_value(
+        self, name: str, annotation: SeriesBase[_T], value: Any
+    ) -> SeriesBase[_T]:
         return value
 
     @overload
@@ -191,7 +195,7 @@ class LoopField(_BlockComponentField):
 
 
 class SingleField(_BlockComponentField):
-    def _validate_value(self, annotation: Any, value: Any) -> Any:
+    def _validate_value(self, name: str, annotation: Any, value: Any) -> Any:
         return annotation(value)
 
     @overload

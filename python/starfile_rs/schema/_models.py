@@ -83,8 +83,12 @@ class StarModel(_SchemaBase):
             block = star.pop(block_name)
             annot = annots[name]
             if issubclass(annot, SingleDataModel):
+                if not isinstance(block, DataBlock):
+                    block = SingleDataBlock._from_any(block_name, block)
                 star_input[block_name] = field.normalize_value(block)
             elif issubclass(annot, LoopDataModel):
+                if not isinstance(block, DataBlock):
+                    block = LoopDataBlock._from_any(block_name, block)
                 star_input[block_name] = field.normalize_value(block)
             else:
                 pass
@@ -242,7 +246,7 @@ class LoopDataModel(BaseBlockModel, Generic[_DF]):
     @classmethod
     def validate_block(cls, value: Any) -> Self:
         if not isinstance(value, DataBlock):
-            out = LoopDataBlock._from_any(value)
+            raise TypeError(f"Value {value!r} is not a DataBlock")
         elif (block := value.try_loop()) is None:
             raise BlockValidationError(
                 f"Block {value.name} cannot be interpreted as a LoopDataBlock"
@@ -274,7 +278,7 @@ class SingleDataModel(BaseBlockModel):
     @classmethod
     def validate_block(cls, value: Any) -> Self:
         if not isinstance(value, DataBlock):
-            out = SingleDataBlock._from_any(value)
+            raise TypeError(f"Value {value!r} is not a DataBlock")
         elif (block := value.try_single()) is None:
             raise BlockValidationError(
                 f"Block {value.name} cannot be interpreted as a SingleDataBlock"
