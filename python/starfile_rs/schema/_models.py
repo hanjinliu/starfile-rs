@@ -118,8 +118,7 @@ class StarModel(_SchemaBase):
                 pass
             elif cls.__starfile_extra__ is Extra.ALLOW:
                 for name, block in star.items():
-                    block = DataBlock._try_parse_single_and_then_loop(name, block)
-                    star_input[name] = AnyBlock(block)
+                    star_input[name] = AnyBlock(AnyBlock._parse_block(name, block))
 
         # Sort star_input by the order of input star. This is important to keep the
         # order of blocks when writing back to file.
@@ -189,7 +188,7 @@ class BaseBlockModel(_SchemaBase):
     @classmethod
     def _parse_block(cls, name: str, value: Any) -> DataBlock:
         if not isinstance(value, DataBlock):
-            raise TypeError(f"Incoming value is not a DataBlock: {value!r} ")
+            value = DataBlock._try_parse_single_and_then_loop(name, value)
         return value
 
     @classmethod
