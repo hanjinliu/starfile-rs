@@ -66,6 +66,14 @@ class LoopDataModel(LoopDataModelBase[pd.DataFrame]):
             usecols=usecols, names=names, dtype=dtype
         )
 
+    @classmethod
+    def _parse_object(cls, name: str, value: Any) -> LoopDataBlock:
+        if hasattr(value, "__dataframe__"):
+            df = pd.api.interchange.from_dataframe(value.__dataframe__())
+        else:
+            df = pd.DataFrame(value)
+        return LoopDataBlock.from_pandas(name, df)
+
 
 def _arg_to_dtype(arg):
     if arg is str:

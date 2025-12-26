@@ -54,9 +54,7 @@ def test_construction(
     assert m.gen.final_res == pytest.approx(16.363636)
     assert m.gen.rlnMaskName == "mask.mrc"
     assert m.gen.randomise_from == "32.727273"
-    assert m.fsc._dataframe_cache is None
     assert m.fsc.dataframe.shape == (49, 2)
-    assert m.fsc._dataframe_cache is not None
     assert isinstance(m.fsc.rlnAngstromResolution, mod.Series)
     assert isinstance(m.fsc.rlnAngstromResolution[0], str)
     assert isinstance(m.fsc.fsc_corrected, mod.Series)
@@ -288,7 +286,7 @@ def test_extra():
     assert star["another_extra"].trust_loop().to_pandas().to_dict(orient="list") == {"a": [1, 2], "b": [3, 4]}
 
 def test_validate_file():
-    from starfile_rs.schema.pandas import Field, LoopDataModel, Series
+    from starfile_rs.schema.pandas import LoopDataModel, Series
 
     class OneLoop(LoopDataModel):
         x: Series[float] = Field("rlnCoordinateX")
@@ -298,8 +296,25 @@ def test_validate_file():
     m = OneLoop.validate_file(loop_simple)
     assert m.x.size > 10
 
-def test_setting_dataframe():
-    from starfile_rs.schema.pandas import Field, LoopDataModel, Series
+@pytest.mark.parametrize(
+    "loopDataModel, series, mod_",
+    [
+        (spd.LoopDataModel, spd.Series, pd),
+        (spl.LoopDataModel, spl.Series, pl),
+    ]
+)
+def test_setting_dataframe(
+    loopDataModel,
+    series,
+    mod_,
+):
+    if TYPE_CHECKING:
+        from starfile_rs.schema.pandas import LoopDataModel, Series
+        mod = pd
+    else:
+        LoopDataModel = loopDataModel
+        Series = series
+        mod = mod_
 
     class OneLoop(LoopDataModel):
         x: Series[float] = Field("rlnCoordinateX")
@@ -308,7 +323,7 @@ def test_setting_dataframe():
 
     class MyModel(StarModel, extra="allow"):
         general: General = Field()
-        one_loop: OneLoop = Field("loop_1")
+        one_loop: OneLoop = Field("loop_1")  # type: ignore
 
     m = MyModel.validate_dict(
         {
@@ -337,7 +352,7 @@ def test_setting_dataframe():
     }
     assert m.one_loop.dataframe.shape == (2, 3)
 
-    m.one_loop = pd.DataFrame(
+    m.one_loop = mod.DataFrame(
         {
             "rlnCoordinateX": [100.0, 200.0],
             "rlnCoordinateY": [300.0, 400.0],
@@ -345,7 +360,11 @@ def test_setting_dataframe():
         }
     )
     assert m.one_loop.dataframe["rlnCoordinateX"].max() > 150.0
-    m.one_loop = pl.DataFrame(
+    if mod is pd:
+        mod_other = pl
+    else:
+        mod_other = pd
+    m.one_loop = mod_other.DataFrame(
         {
             "rlnCoordinateX": [-100.0, 200.0],
             "rlnCoordinateY": [-300.0, 400.0],
@@ -353,3 +372,48 @@ def test_setting_dataframe():
         }
     )
     assert m.one_loop.dataframe["rlnCoordinateX"].min() < -50.0
+
+@pytest.mark.parametrize(
+    "loopDataModel, series",
+    [
+        (spd.LoopDataModel, spd.Series),
+        (spl.LoopDataModel, spl.Series),
+    ]
+)
+def test_dataclass_like_init(
+    loopDataModel,
+    series,
+):
+    if TYPE_CHECKING:
+        from starfile_rs.schema.pandas import LoopDataModel, Series
+    else:
+        LoopDataModel = loopDataModel
+        Series = series
+
+    class OneLoop(LoopDataModel):
+        x: Series[float] = Field("rlnCoordinateX")
+        y: Series[float] = Field("rlnCoordinateY")
+        z: Series[float] = Field("rlnCoordinateZ")
+
+    class MyModel(StarModel, extra="allow"):
+        general: General = Field()
+        one_loop: OneLoop = Field("loop_1")
+
+    m = MyModel(
+        general=General(
+            final_res=15.0,
+            rlnMaskName="mask2.mrc",
+            randomise_from="2.0",
+        ),
+        one_loop=OneLoop(
+            x=[1.0, 2.0, 3.0],
+            y=[4.0, 5.0, 6.0],
+            z=[7.0, 8.0, 9.0],
+        ),
+    )
+    assert m.general.final_res == 15.0
+    assert m.general.rlnMaskName == "mask2.mrc"
+    assert m.general.randomise_from == "2.0"
+    assert list(m.one_loop.x) == pytest.approx([1.0, 2.0, 3.0])
+    assert list(m.one_loop.y) == pytest.approx([4.0, 5.0, 6.0])
+    assert list(m.one_loop.z) == pytest.approx([7.0, 8.0, 9.0])

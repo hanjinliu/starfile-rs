@@ -49,10 +49,7 @@ star["general"].trust_single().to_dict()
 # update or add a new loop data block
 import pandas as pd
 
-star.with_loop_block(
-    name="new_loop_data",
-    data=pd.DataFrame({"col1": [1, 2, 3], "col2": ["a", "b", "c"]}),
-)
+star["new_loop_data"] = pd.DataFrame({"col1": [1, 2, 3], "col2": ["a", "b", "c"]})
 ```
 
 ### Performance
@@ -93,4 +90,47 @@ if block := star.get("general"):
 if block := star.get("general"):
     if single := block.try_single():  # Safe
         single.to_dict()
+```
+
+### Schema Validation
+
+STAR files from specific software such as [RELION](https://relion.readthedocs.io/en/latest/) often have known structures. `starfile-rs` provides **schema validation** to parse STAR files into strongly typed models, making it even much safer to access attributes.
+
+For example, [RELION job.star file schema](examples/schema_relion_job.py) can be defined as follows.
+
+```python
+import starfile_rs.schema.pandas as schema
+
+class Job(schema.SingleDataModel):
+    type_label: str = schema.Field("rlnJobTypeLabel")
+    is_continue: int = schema.Field("rlnJobIsContinue")
+    is_tomo: int = schema.Field("rlnJobIsTomo")
+
+class JobOptionsValues(schema.LoopDataModel):
+    variable: schema.Series[str] = schema.Field("rlnJobOptionVariable")
+    value: schema.Series[object] = schema.Field("rlnJobOptionValue")
+
+class JobStarModel(schema.StarModel):
+    job: Job = schema.Field("job")
+    options: JobOptionsValues = schema.Field("joboptions_values")
+```
+
+Now, you can safely parse and access attributes from a job.star file,
+
+```python
+job = JobStarModel.validate_file("path/to/job.star")
+print(job.job.type_label)
+print(job.options)
+```
+
+edit the data,
+
+```python
+job.job.is_continue = 1
+```
+
+and write back to a file.
+
+```python
+job.write("path/to/new_job.star")
 ```

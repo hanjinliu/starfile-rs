@@ -89,10 +89,37 @@ def main():
         path.write_text(JOB_PIPELINE_STAR)
         pipeline = RelionPipeline.validate_file(path)
 
-    # attributes can safely be accessed
+    # Attributes can safely be accessed
     print(f"{pipeline.general.count=!r}")
     print(f"{pipeline.nodes.type_label_depth.max()=!r}")
 
+    print(pipeline)
+
+    # You can also use a dataclass-like syntax to construct instances
+    pipeline = RelionPipeline(
+        general=RelionPipelineGeneral(count=5),
+        processes=RelionPipelineProcesses(
+            name=["proc1", "proc2"],
+            alias=["alias1", "alias2"],
+            type_label=["type1", "type2"],
+            status_label=["status1", "status2"],
+        ),
+        nodes=RelionPipelineNodes(
+            name=["node1", "node2"],
+            type_label=["typeA", "typeB"],
+            type_label_depth=[1, 2],
+        ),
+        input_edges=RelionPipelineInputEdges(
+            from_node=["nodeX", "nodeY"],
+            process=["procX", "procY"],
+        ),
+        output_edges=RelionPipelineOutputEdges(
+            process=["procM", "procN"],
+            to_node=["nodeM", "nodeN"],
+        )
+    )
+
+    print("----- Constructed in Python -----")
     print(pipeline)
 
 if __name__ == "__main__":
