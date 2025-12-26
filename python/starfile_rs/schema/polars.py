@@ -39,6 +39,16 @@ class LoopDataModel(LoopDataModelBase[pl.DataFrame]):
         cls, block: LoopDataBlock, fields: list[LoopField]
     ) -> pl.DataFrame:
         schema = {col: pl.String for col in block.columns}
+        for f in fields:
+            if f.column_name not in block.columns:
+                if f._default is f._empty:
+                    raise ValueError(
+                        f"Required column '{f.column_name}' not found in data block "
+                        f"'{block.name}'."
+                    )
+                else:
+                    schema.pop(f.column_name)
+
         new_columns: list[int] = []
         for f in fields:
             schema[f.column_name] = _type_to_schema(f._get_annotation_arg())

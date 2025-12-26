@@ -50,6 +50,16 @@ class LoopDataModel(LoopDataModelBase[pd.DataFrame]):
         cls, block: LoopDataBlock, fields: list[LoopField]
     ) -> pd.DataFrame:
         dtype = {f.column_name: _arg_to_dtype(f._get_annotation_arg()) for f in fields}
+        for f in fields:
+            if f.column_name not in block.columns:
+                if f._default is f._empty:
+                    raise ValueError(
+                        f"Required column '{f.column_name}' not found in data block "
+                        f"'{block.name}'."
+                    )
+                else:
+                    dtype.pop(f.column_name)
+
         names = list(dtype.keys())
         usecols = [block.columns.index(name) for name in names]
         return block.trust_loop()._to_pandas_impl(
