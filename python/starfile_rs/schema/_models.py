@@ -4,6 +4,7 @@ import enum
 from io import TextIOBase
 from pathlib import Path
 from types import MappingProxyType
+from functools import cached_property
 from typing import (
     Any,
     Generic,
@@ -26,7 +27,11 @@ from starfile_rs.schema._fields import (
 from starfile_rs.schema._exception import BlockValidationError, ValidationError
 
 if TYPE_CHECKING:
-    from typing import Self
+    from typing import Self, dataclass_transform
+else:
+
+    def dataclass_transform(*args, **kwargs):
+        return lambda c: c
 
 
 class Extra(enum.Enum):
@@ -36,6 +41,7 @@ class Extra(enum.Enum):
 
 
 ExtraType = Literal["allow", "forbid", "ignore"]
+STARFILE_CONSTRUCT_KEY = "__starfile_construct__"
 
 
 class _SchemaBase:
@@ -50,14 +56,20 @@ class _SchemaBase:
         return f"{type(self).__name__}({fields_str})"
 
 
+@dataclass_transform(field_specifiers=(Field,))
 class StarModel(_SchemaBase):
     """Base class for STAR file schema models."""
 
     __starfile_fields__: MappingProxyType[str, BlockField]
     __starfile_extra__: Extra
+    _block_models: dict[str, BaseBlockModel]
 
-    def __init__(self, block_models: dict[str, BaseBlockModel]):
-        self._block_models = block_models
+    def __init__(self, /, **kwargs: Any):
+        if STARFILE_CONSTRUCT_KEY in kwargs:
+            self._block_models = kwargs[STARFILE_CONSTRUCT_KEY]
+        else:
+            other = type(self).validate_dict(kwargs)
+            self._block_models = other._block_models
 
     def __init_subclass__(cls, extra: ExtraType = "ignore"):
         schema_fields: dict[str, Field] = {}
@@ -66,7 +78,8 @@ class StarModel(_SchemaBase):
                 continue
             if not issubclass(annot, BaseBlockModel):
                 raise TypeError(
-                    f"StarModel field '{name}' must be a subclass of BaseBlockModel"
+                    f"StarModel field '{name}' must be a subclass of SingleDataModel "
+                    f"or LoopDataModel, got {annot}"
                 )
             field = getattr(cls, name, None)
             if isinstance(field, Field):
@@ -81,7 +94,7 @@ class StarModel(_SchemaBase):
     def validate_dict(cls, star: Mapping[str, Any]) -> Self:
         """Validate a dict of DataBlocks against this StarModel schema."""
         missing: list[str] = []
-        star_input: dict[str, DataBlock] = {}
+        star_input: dict[str, BaseBlockModel] = {}
         annots = get_type_hints(cls)
         star = dict(star)
         star_keys = list(star.keys())
@@ -95,18 +108,17 @@ class StarModel(_SchemaBase):
             block = star.pop(block_name)
             annot = annots[name]
             if issubclass(annot, SingleDataModel):
-                if not isinstance(block, DataBlock):
-                    block = SingleDataBlock._from_any(block_name, block)
                 star_input[block_name] = field.normalize_value(block)
             elif issubclass(annot, LoopDataModel):
-                if not isinstance(block, DataBlock):
-                    block = LoopDataBlock._from_any(block_name, block)
                 star_input[block_name] = field.normalize_value(block)
-            else:
-                pass
+            else:  # pragma: no cover
+                # All the annotations should have been checked in __init_subclass__
+                raise RuntimeError("Unreachable code reached.")
         if missing:
+            _miss = ", ".join(repr(m) for m in missing)
             raise ValidationError(
-                f"StarModel {cls.__name__} is missing required fields: {', '.join(missing)}"
+                f"StarModel {cls.__name__} is missing required fields: "
+                f"{_miss}. Incoming block names: {star_keys}"
             )
         if star:
             if cls.__starfile_extra__ is Extra.FORBID:
@@ -118,26 +130,43 @@ class StarModel(_SchemaBase):
                 pass
             elif cls.__starfile_extra__ is Extra.ALLOW:
                 for name, block in star.items():
-                    star_input[name] = AnyBlock(AnyBlock._parse_block(name, block))
+                    star_input[name] = AnyBlock.validate_object(block)
 
         # Sort star_input by the order of input star. This is important to keep the
         # order of blocks when writing back to file.
-        star_input = {k: star_input[k] for k in star_keys if k in star_input}
-        return cls(star_input)
+        star_input_sorted = {}
+        for k in star_keys:
+            if k in star_input:
+                # make sure key and block name match
+                model = star_input[k]
+                model._block._rust_obj.set_name(k)
+                star_input_sorted[k] = model
+        return cls(**{STARFILE_CONSTRUCT_KEY: star_input_sorted})
 
     @classmethod
     def validate_file(cls, path) -> Self:
         """Read a STAR file and validate it against this StarModel schema."""
         required = {f.block_name for f in cls.__starfile_fields__.values()}
         mapping = {}
+        all_block_names: list[str] = []
         for block in iter_star_blocks(path):
+            all_block_names.append(block.name)
             if (name := block.name) in required:
                 mapping[name] = block
                 required.remove(name)
             if not required and cls.__starfile_extra__ is Extra.IGNORE:
                 break
-        # NOTE: we do not check if required is empty here, because validate_dict will
-        # do that.
+        # Check for missing required fields here. Although validate_dict will also
+        # do this, user can be notified with what blocks are actually in the file.
+        for field in cls.__starfile_fields__.values():
+            if field._default is not Field._empty:
+                required.discard(field.block_name)
+        if required:
+            _miss = ", ".join(repr(m) for m in required)
+            raise ValidationError(
+                f"StarModel {cls.__name__} is missing required fields: "
+                f"{_miss}. Incoming block names: {all_block_names}"
+            )
         return cls.validate_dict(mapping)
 
     @classmethod
@@ -163,9 +192,14 @@ class StarModel(_SchemaBase):
 
 class BaseBlockModel(_SchemaBase):
     __starfile_fields__: MappingProxyType[str, _BlockComponentField]
+    _block: DataBlock
 
-    def __init__(self, block: DataBlock):
-        self._block = block
+    def __init__(self, /, **kwargs: Any):
+        if STARFILE_CONSTRUCT_KEY in kwargs:
+            self._block = kwargs[STARFILE_CONSTRUCT_KEY]
+        else:
+            # create an unnamed DataBlock from kwargs
+            self._block = type(self)._parse_block("", kwargs)
 
     @classmethod
     def validate_block(cls, value: Any) -> Self:
@@ -183,13 +217,19 @@ class BaseBlockModel(_SchemaBase):
                 f"Block {block.name} did not pass validation by {cls.__name__!r}: "
                 f"missing columns: {missing}"
             )
-        return cls(block)
+        return cls(**{STARFILE_CONSTRUCT_KEY: block})
 
     @classmethod
     def _parse_block(cls, name: str, value: Any) -> DataBlock:
         if not isinstance(value, DataBlock):
             value = DataBlock._try_parse_single_and_then_loop(name, value)
         return value
+
+    @classmethod
+    def validate_object(cls, value: Any) -> Self:
+        """Create an unnamed DataBlock from an object."""
+        block = cls._parse_block("", value)
+        return cls.validate_block(block)
 
     @classmethod
     def validate_file(cls, path) -> Self:
@@ -228,10 +268,6 @@ class LoopDataModel(BaseBlockModel, Generic[_DF]):
     _series_class: type
     _block: LoopDataBlock
 
-    def __init__(self, block: LoopDataBlock):
-        super().__init__(block)
-        self._dataframe_cache = None
-
     def __init_subclass__(cls):
         schema_fields: dict[str, Field] = {}
         for name, annot in get_type_hints(cls).items():
@@ -258,14 +294,11 @@ class LoopDataModel(BaseBlockModel, Generic[_DF]):
         fields_str = ", ".join(field_reprs)
         return f"{type(self).__name__}(<{nrows} rows> {fields_str})"
 
-    @property
+    @cached_property
     def dataframe(self) -> _DF:
         """Return the underlying table as a DataFrame."""
-        if (df := self._dataframe_cache) is None:
-            fields = list(self.__starfile_fields__.values())
-            df = self._get_dataframe(self._block.trust_loop(), fields)
-            self._dataframe_cache = df
-        return df
+        fields = list(self.__starfile_fields__.values())
+        return self._get_dataframe(self._block.trust_loop(), fields)
 
     @property
     def block(self) -> LoopDataBlock:
@@ -275,7 +308,7 @@ class LoopDataModel(BaseBlockModel, Generic[_DF]):
     @classmethod
     def _parse_block(cls, name: str, value: Any) -> LoopDataBlock:
         if not isinstance(value, DataBlock):
-            block = LoopDataBlock._from_any(name, value)
+            block = cls._parse_object(name, value)
         elif (block := value.try_loop()) is None:
             raise BlockValidationError(
                 f"Block {value.name} cannot be interpreted as a LoopDataBlock"
@@ -284,6 +317,15 @@ class LoopDataModel(BaseBlockModel, Generic[_DF]):
 
     @classmethod
     def _get_dataframe(cls, block: LoopDataBlock, fields: list[LoopField]) -> _DF:
+        raise NotImplementedError  # pragma: no cover
+
+    @classmethod
+    def _parse_object(cls, name: str, value: Any) -> LoopDataBlock:
+        """Method called to parse non-DataBlock objects into LoopDataBlock.
+
+        Construction of a loop data relies on pandas/polars DataFrame constructor, so
+        this method should be implemented in subclasses.
+        """
         raise NotImplementedError  # pragma: no cover
 
 

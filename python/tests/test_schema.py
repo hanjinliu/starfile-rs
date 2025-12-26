@@ -54,9 +54,7 @@ def test_construction(
     assert m.gen.final_res == pytest.approx(16.363636)
     assert m.gen.rlnMaskName == "mask.mrc"
     assert m.gen.randomise_from == "32.727273"
-    assert m.fsc._dataframe_cache is None
     assert m.fsc.dataframe.shape == (49, 2)
-    assert m.fsc._dataframe_cache is not None
     assert isinstance(m.fsc.rlnAngstromResolution, mod.Series)
     assert isinstance(m.fsc.rlnAngstromResolution[0], str)
     assert isinstance(m.fsc.fsc_corrected, mod.Series)

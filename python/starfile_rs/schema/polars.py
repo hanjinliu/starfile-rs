@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Generic, SupportsIndex, TypeVar, overload
+from typing import TYPE_CHECKING, Any, Generic, SupportsIndex, TypeVar, overload
 import polars as pl
 
 from starfile_rs.components import LoopDataBlock
@@ -60,6 +60,11 @@ class LoopDataModel(LoopDataModelBase[pl.DataFrame]):
             schema=schema,
             infer_schema=False,
         )
+
+    @classmethod
+    def _parse_object(cls, name: str, value: Any) -> LoopDataBlock:
+        df = pl.DataFrame(value, strict=False)
+        return LoopDataBlock.from_polars(name, df)
 
 
 def _type_to_schema(typ):
