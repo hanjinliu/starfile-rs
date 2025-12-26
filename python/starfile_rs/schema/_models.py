@@ -118,10 +118,7 @@ class StarModel(_SchemaBase):
                 pass
             elif cls.__starfile_extra__ is Extra.ALLOW:
                 for name, block in star.items():
-                    try:
-                        block = SingleDataBlock._from_any(name, block)
-                    except Exception:
-                        block = LoopDataBlock._from_any(name, block)
+                    block = DataBlock._try_parse_single_and_then_loop(name, block)
                     star_input[name] = AnyBlock(block)
 
         # Sort star_input by the order of input star. This is important to keep the
@@ -173,21 +170,27 @@ class BaseBlockModel(_SchemaBase):
 
     @classmethod
     def validate_block(cls, value: Any) -> Self:
-        # validate column names
         if not isinstance(value, DataBlock):
             raise TypeError(f"Value {value!r} is not a DataBlock")
+        block = cls._parse_block(value.name, value)
         fields = list(cls.__starfile_fields__.values())
         missing: list[str] = []
         for f in fields:
-            if f.column_name not in value.columns and f._default is Field._empty:
+            if f.column_name not in block.columns and f._default is Field._empty:
                 missing.append(f.column_name)
         if missing:
             # If this model has no attributes, validation error will not be raised here.
             raise BlockValidationError(
-                f"Block {value.name} did not pass validation by {cls.__name__!r}: "
+                f"Block {block.name} did not pass validation by {cls.__name__!r}: "
                 f"missing columns: {missing}"
             )
-        return cls(value)
+        return cls(block)
+
+    @classmethod
+    def _parse_block(cls, name: str, value: Any) -> DataBlock:
+        if not isinstance(value, DataBlock):
+            raise TypeError(f"Incoming value is not a DataBlock: {value!r} ")
+        return value
 
     @classmethod
     def validate_file(cls, path) -> Self:
@@ -271,16 +274,14 @@ class LoopDataModel(BaseBlockModel, Generic[_DF]):
         return self._block
 
     @classmethod
-    def validate_block(cls, value: Any) -> Self:
+    def _parse_block(cls, name: str, value: Any) -> LoopDataBlock:
         if not isinstance(value, DataBlock):
-            raise TypeError(f"Value {value!r} is not a DataBlock")
+            block = LoopDataBlock._from_any(name, value)
         elif (block := value.try_loop()) is None:
             raise BlockValidationError(
                 f"Block {value.name} cannot be interpreted as a LoopDataBlock"
             )
-        else:
-            out = block
-        return super().validate_block(out)
+        return block
 
     @classmethod
     def _get_dataframe(cls, block: LoopDataBlock, fields: list[LoopField]) -> _DF:
@@ -304,16 +305,14 @@ class SingleDataModel(BaseBlockModel):
         cls.__starfile_fields__ = MappingProxyType(schema_fields)
 
     @classmethod
-    def validate_block(cls, value: Any) -> Self:
+    def _parse_block(cls, name: str, value: Any) -> LoopDataBlock:
         if not isinstance(value, DataBlock):
-            raise TypeError(f"Value {value!r} is not a DataBlock")
+            block = SingleDataBlock._from_any(name, value)
         elif (block := value.try_single()) is None:
             raise BlockValidationError(
                 f"Block {value.name} cannot be interpreted as a SingleDataBlock"
             )
-        else:
-            out = block
-        return super().validate_block(out)
+        return block
 
     @property
     def block(self) -> SingleDataBlock:

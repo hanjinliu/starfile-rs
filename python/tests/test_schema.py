@@ -287,7 +287,7 @@ def test_extra():
     assert star["another_extra"].columns == ["a", "b"]
     assert star["another_extra"].trust_loop().to_pandas().to_dict(orient="list") == {"a": [1, 2], "b": [3, 4]}
 
-def test_validater_file():
+def test_validate_file():
     from starfile_rs.schema.pandas import Field, LoopDataModel, Series
 
     class OneLoop(LoopDataModel):
@@ -297,3 +297,59 @@ def test_validater_file():
 
     m = OneLoop.validate_file(loop_simple)
     assert m.x.size > 10
+
+def test_setting_dataframe():
+    from starfile_rs.schema.pandas import Field, LoopDataModel, Series
+
+    class OneLoop(LoopDataModel):
+        x: Series[float] = Field("rlnCoordinateX")
+        y: Series[float] = Field("rlnCoordinateY")
+        z: Series[float] = Field("rlnCoordinateZ")
+
+    class MyModel(StarModel, extra="allow"):
+        general: General = Field()
+        one_loop: OneLoop = Field("loop_1")
+
+    m = MyModel.validate_dict(
+        {
+            "general": {
+                "rlnFinalResolution": 10,
+                "rlnMaskName": "mask.mrc",
+                "rlnRandomiseFrom": "0",
+            },
+            "loop_1": {
+                "rlnCoordinateX": [1.0, 2.0, 3.0],
+                "rlnCoordinateY": [4.0, 5.0, 6.0],
+                "rlnCoordinateZ": [7.0, 8.0, 9.0],
+            },
+        }
+    )
+    m.general = {"rlnFinalResolution": 12.0, "rlnMaskName": "new_mask.mrc", "rlnRandomiseFrom": "1.0"}
+    assert m.general.final_res == 12.0
+    assert m.general.rlnMaskName == "new_mask.mrc"
+    assert m.general.randomise_from == "1.0"
+
+    # once schema is ready, setting any type of dataframes should be allowed
+    m.one_loop = {
+        "rlnCoordinateX": [10.0, 20.0],
+        "rlnCoordinateY": [30.0, 40.0],
+        "rlnCoordinateZ": [50.0, 60.0],
+    }
+    assert m.one_loop.dataframe.shape == (2, 3)
+
+    m.one_loop = pd.DataFrame(
+        {
+            "rlnCoordinateX": [100.0, 200.0],
+            "rlnCoordinateY": [300.0, 400.0],
+            "rlnCoordinateZ": [500.0, 600.0],
+        }
+    )
+    assert m.one_loop.dataframe["rlnCoordinateX"].max() > 150.0
+    m.one_loop = pl.DataFrame(
+        {
+            "rlnCoordinateX": [-100.0, 200.0],
+            "rlnCoordinateY": [-300.0, 400.0],
+            "rlnCoordinateZ": [-500.0, 600.0],
+        }
+    )
+    assert m.one_loop.dataframe["rlnCoordinateX"].min() < -50.0
