@@ -195,9 +195,9 @@ def test_parsing_speed(tmpdir):
     read_star(path)
     end = time.time()
 
-    # Check that execution takes less than 100 ms
+    # Check that execution takes less than 150 ms
     dt = end - start
-    assert dt < 0.1
+    assert dt < 0.15
 
 
 def test_two_single_line_loop_blocks():

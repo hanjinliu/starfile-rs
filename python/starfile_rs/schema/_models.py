@@ -40,7 +40,6 @@ ExtraType = Literal["allow", "forbid", "ignore"]
 
 class _SchemaBase:
     __starfile_fields__: MappingProxyType[str, Field]
-    __starfile_extra__: Extra
 
     def __repr__(self) -> str:
         field_reprs = []
@@ -55,6 +54,7 @@ class StarModel(_SchemaBase):
     """Base class for STAR file schema models."""
 
     __starfile_fields__: MappingProxyType[str, BlockField]
+    __starfile_extra__: Extra
 
     def __init__(self, block_models: dict[str, BaseBlockModel]):
         self._block_models = block_models
@@ -62,7 +62,7 @@ class StarModel(_SchemaBase):
     def __init_subclass__(cls, extra: ExtraType = "ignore"):
         schema_fields: dict[str, Field] = {}
         for name, annot in get_type_hints(cls).items():
-            if name in _SchemaBase.__annotations__:
+            if name in StarModel.__annotations__:
                 continue
             if not issubclass(annot, BaseBlockModel):
                 raise TypeError(
@@ -230,7 +230,7 @@ class LoopDataModel(BaseBlockModel, Generic[_DF]):
         super().__init__(block)
         self._dataframe_cache = None
 
-    def __init_subclass__(cls, extra: ExtraType = "ignore"):
+    def __init_subclass__(cls):
         schema_fields: dict[str, Field] = {}
         for name, annot in get_type_hints(cls).items():
             field = getattr(cls, name, None)
@@ -245,7 +245,6 @@ class LoopDataModel(BaseBlockModel, Generic[_DF]):
                 setattr(cls, name, new_field)
 
         cls.__starfile_fields__ = MappingProxyType(schema_fields)
-        cls.__starfile_extra__ = Extra(extra)
 
     def __repr__(self) -> str:
         field_reprs = []
@@ -293,7 +292,7 @@ class SingleDataModel(BaseBlockModel):
 
     __starfile_fields__: MappingProxyType[str, SingleField]
 
-    def __init_subclass__(cls, extra: ExtraType = "ignore"):
+    def __init_subclass__(cls):
         schema_fields: dict[str, Field] = {}
         for name, annot in get_type_hints(cls).items():
             field = getattr(cls, name, None)
@@ -303,7 +302,6 @@ class SingleDataModel(BaseBlockModel):
                 setattr(cls, name, new_field)
 
         cls.__starfile_fields__ = MappingProxyType(schema_fields)
-        cls.__starfile_extra__ = Extra(extra)
 
     @classmethod
     def validate_block(cls, value: Any) -> Self:
