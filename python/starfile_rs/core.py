@@ -1,4 +1,3 @@
-from importlib import import_module
 from pathlib import Path
 from io import TextIOBase
 from typing import (
@@ -16,11 +15,7 @@ from starfile_rs.components import DataBlock, SingleDataBlock, LoopDataBlock
 from starfile_rs import _repr
 
 if TYPE_CHECKING:
-    from typing import TypeGuard
     import os
-    import numpy as np
-    import pandas as pd
-    import polars as pl
 
 
 def read_star(path: "str | os.PathLike") -> "StarDict":
@@ -102,7 +97,7 @@ def as_star(obj=None, /, **kwargs) -> "StarDict":
             out.with_single_block("", obj)
         else:
             for key, value in obj.items():
-                _set_single_or_double(out, key, value)
+                _set_single_or_loop(out, key, value)
     elif isinstance(obj, (list, tuple)):
         return as_star({str(idx): df for idx, df in enumerate(obj)})
     else:
@@ -172,7 +167,7 @@ class StarDict(MutableMapping[str, "DataBlock"]):
         assumed to be SingleDataBlock. To explicitly set the type of data block, use
         `with_single_block()` or `with_loop_block()` methods.
         """
-        _set_single_or_double(self, key, value)
+        _set_single_or_loop(self, key, value)
 
     def __delitem__(self, key: str) -> None:
         self._names.remove(key)
@@ -277,14 +272,7 @@ class StarDict(MutableMapping[str, "DataBlock"]):
         inplace : bool, default True
             If True, modify the StarDict in place. If False, return a new StarDict
         """
-        if _is_pandas_dataframe(data):
-            block = LoopDataBlock.from_pandas(name, data, quote_unsafe=quote_unsafe)
-        elif _is_polars_dataframe(data):
-            block = LoopDataBlock.from_polars(name, data, quote_unsafe=quote_unsafe)
-        elif _is_numpy_array(data):
-            block = LoopDataBlock.from_numpy(name, data)
-        else:
-            block = LoopDataBlock.from_obj(name, data)
+        block = LoopDataBlock._from_any(name, data, quote_unsafe=quote_unsafe)
         return self.with_block(block, inplace=inplace)
 
     def write(self, file: str | Path | TextIOBase) -> None:
@@ -307,30 +295,6 @@ class StarDict(MutableMapping[str, "DataBlock"]):
         return "".join(strings)
 
 
-def _is_pandas_dataframe(obj: Any) -> "TypeGuard[pd.DataFrame]":
-    return _is_instance(obj, "pandas", "DataFrame")
-
-
-def _is_polars_dataframe(obj: Any) -> "TypeGuard[pl.DataFrame]":
-    return _is_instance(obj, "polars", "DataFrame")
-
-
-def _is_numpy_array(obj: Any) -> "TypeGuard[np.ndarray]":
-    return _is_instance(obj, "numpy", "ndarray")
-
-
-def _is_instance(obj, mod: str, cls_name: str):
-    if not isinstance(obj_mod := getattr(type(obj), "__module__", None), str):
-        return False
-    if obj_mod.split(".")[0] != mod:
-        return False
-    if obj.__class__.__name__ != cls_name:
-        return False
-    imported_mod = import_module(mod)
-    cls = getattr(imported_mod, cls_name)
-    return isinstance(obj, cls)
-
-
 def _is_scalar(obj: Any) -> bool:
     return (
         isinstance(obj, (str, int, float, bool))
@@ -340,7 +304,7 @@ def _is_scalar(obj: Any) -> bool:
     )
 
 
-def _set_single_or_double(star: "StarDict", key: str, value: Any) -> None:
+def _set_single_or_loop(star: "StarDict", key: str, value: Any) -> None:
     if isinstance(value, DataBlock):
         star.with_block(value, inplace=True)
     elif isinstance(value, Mapping):

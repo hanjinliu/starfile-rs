@@ -13,18 +13,38 @@ if TYPE_CHECKING:
     )
     from starfile_rs.schema._series import SeriesBase
 
+_empty = object()
+
 
 class Field:
     """Descriptor for star file schema fields.
 
     This object will automatically be converted to BlockField, SingleField, or LoopField
     when used in schema subclasses.
+
+    Parameters
+    ----------
+    name : str, optional
+        The actual name of the field in the star file. If None, the attribute name will
+        be used.
+    frozen : bool, default False
+        If True, the field cannot be modified after being set.
     """
 
-    def __init__(self, name: str | None = None):
+    _empty = _empty
+
+    def __init__(
+        self,
+        name: str | None = None,
+        *,
+        default: Any = _empty,
+        frozen: bool = False,
+    ):
         self._star_name = name
         self._field_name: str | None = None
         self._annotation: Any | None = None
+        self._default = default
+        self._frozen = frozen
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(name={self._field_name!r}, annotation={self.annotation!r})"
@@ -45,7 +65,7 @@ class Field:
         field: Field,
         annotation,
     ) -> Self:
-        self = cls(field._star_name)
+        self = cls(field._star_name, frozen=field._frozen, default=field._default)
         if annotation is None:
             raise ValueError(f"Field {field._field_name!r} requires a type annotation")
         self._annotation = annotation
@@ -87,8 +107,26 @@ class BlockField(Field):
     ) -> BlockField | BaseBlockModel:
         if instance is None:
             return self
+        if self.block_name in instance._block_models:
+            return instance._block_models[self.block_name]
+        if self._default is not self._empty:
+            return self._default
+        raise AttributeError(
+            f"Block '{self.block_name}' has not been set in instance of {owner.__name__}"
+        )
+
+    def __set__(
+        self,
+        instance: StarModel,
+        value: DataBlock,
+    ) -> None:
+        if self._frozen:
+            raise AttributeError(
+                f"Field '{self._field_name}' is frozen and cannot be modified."
+            )
         model = instance._block_models[self.block_name]
-        return model
+        block = model.validate_block(value)
+        instance._block_models[self.block_name] = block
 
     @property
     def block_name(self) -> str:
@@ -135,9 +173,12 @@ class LoopField(_BlockComponentField):
     def __get__(self, instance: LoopDataModel | None, owner):
         if owner is None:
             return self
-        return self._get_from_model(instance)
-
-    def _get_from_model(self, instance: LoopDataModel) -> SeriesBase[_T]:
+        if self.column_name not in instance._block.columns:
+            if self._default is not self._empty:
+                return self._default
+            raise AttributeError(
+                f"Column '{self.column_name}' has not been set in instance of {owner.__name__}"
+            )
         return instance.dataframe[self.column_name]
 
     def _get_annotation_arg(self) -> type[_T]:
@@ -173,7 +214,14 @@ class SingleField(_BlockComponentField):
     ):
         if instance is None:
             return self
-        return self.normalize_value(instance._block.trust_single()[self.column_name])
+        block = instance._block.trust_single()
+        if self.column_name not in block.columns:
+            if self._default is not self._empty:
+                return self._default
+            raise AttributeError(
+                f"Column '{self.column_name}' has not been set in instance of {owner.__name__}"
+            )
+        return self.normalize_value(block[self.column_name])
 
 
 _T = TypeVar("_T")

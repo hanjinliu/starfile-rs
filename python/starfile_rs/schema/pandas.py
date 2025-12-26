@@ -1,6 +1,14 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Generic, SupportsIndex, TypeVar, overload
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Generic,
+    Iterator,
+    SupportsIndex,
+    TypeVar,
+    overload,
+)
 import pandas as pd
 
 from starfile_rs.components import LoopDataBlock
@@ -18,15 +26,18 @@ _T = TypeVar("_T")
 
 if TYPE_CHECKING:
 
-    class pd_Series(pd.Series, Generic[_T]):
+    class PandasSeries(pd.Series, Generic[_T]):
         @overload
         def __getitem__(self, key: SupportsIndex) -> _T: ...
         @overload
-        def __getitem__(self, key: slice) -> pd.Series[_T]: ...
+        def __getitem__(self, key: Any) -> pd.Series[_T]: ...
+
+        def __iter__(self) -> Iterator[_T]: ...
+        def __next__(self) -> _T: ...
 
 
 class Series(SeriesBase[_T]):
-    def __get__(self, instance: Any | None, owner) -> pd_Series[_T]:
+    def __get__(self, instance: Any | None, owner) -> PandasSeries[_T]:
         return self
 
 
