@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING
 import pandas as pd
 import polars as pl
 import pytest
+from starfile_rs import LoopDataBlock, SingleDataBlock
 from starfile_rs.schema import (
     StarModel,
     SingleDataModel,
@@ -11,7 +12,7 @@ from starfile_rs.schema import (
     pandas as spd,
     polars as spl,
 )
-from .constants import test_data_directory
+from .constants import test_data_directory, loop_simple
 
 class General(SingleDataModel):
     final_res: float = Field("rlnFinalResolution")
@@ -60,7 +61,11 @@ def test_construction(
     assert isinstance(m.fsc.rlnAngstromResolution[0], str)
     assert isinstance(m.fsc.fsc_corrected, mod.Series)
     assert isinstance(m.fsc.fsc_corrected[0], float)
-
+    assert isinstance(m.to_string(), str)
+    assert isinstance(m.gen.to_string(), str)
+    assert isinstance(m.fsc.to_string(), str)
+    assert isinstance(m.gen.block, SingleDataBlock)
+    assert isinstance(m.fsc.block, LoopDataBlock)
 
 @pytest.mark.parametrize(
     "loopDataModel, series",
@@ -281,3 +286,14 @@ def test_extra():
     assert star["extra_field"].trust_single().to_dict() == {"some_value": 42}
     assert star["another_extra"].columns == ["a", "b"]
     assert star["another_extra"].trust_loop().to_pandas().to_dict(orient="list") == {"a": [1, 2], "b": [3, 4]}
+
+def test_validater_file():
+    from starfile_rs.schema.pandas import Field, LoopDataModel, Series
+
+    class OneLoop(LoopDataModel):
+        x: Series[float] = Field("rlnCoordinateX")
+        y: Series[float] = Field("rlnCoordinateY")
+        z: Series[float] = Field("rlnCoordinateZ")
+
+    m = OneLoop.validate_file(loop_simple)
+    assert m.x.size > 10

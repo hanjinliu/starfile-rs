@@ -138,7 +138,7 @@ class StarModel(_SchemaBase):
             if (name := block.name) in required:
                 mapping[name] = block
                 required.remove(name)
-            if not required and not cls.__starfile_extra__:
+            if not required and cls.__starfile_extra__ is Extra.IGNORE:
                 break
         # NOTE: we do not check if required is empty here, because validate_dict will
         # do that.
