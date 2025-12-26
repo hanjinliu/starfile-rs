@@ -125,7 +125,7 @@ class BlockField(Field):
                 f"Field '{self._field_name}' is frozen and cannot be modified."
             )
         model = instance._block_models[self.block_name]
-        block = model.validate_block(value)
+        block = self._validate_value(self.block_name, type(model), value)
         instance._block_models[self.block_name] = block
 
     @property
@@ -143,7 +143,8 @@ class BlockField(Field):
                 "BlockField annotation must be a subclass of BaseBlockModel, "
                 f"got {annotation}"
             )
-        return annotation.validate_block(value)
+        block = annotation._parse_block(name, value)
+        return annotation.validate_block(block)
 
 
 class _BlockComponentField(Field):

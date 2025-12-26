@@ -34,6 +34,14 @@ class DataBlock(ABC):
     def _ipython_key_completions_(self) -> list[str]:
         return self.columns
 
+    @staticmethod
+    def _try_parse_single_and_then_loop(name: str, value) -> "DataBlock":
+        try:
+            block = SingleDataBlock._from_any(name, value)
+        except Exception:
+            block = LoopDataBlock._from_any(name, value)
+        return block
+
     def trust_single(self, allow_conversion: bool = True) -> "SingleDataBlock":
         """Convert this data block to a single data block.
 
