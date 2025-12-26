@@ -137,7 +137,19 @@ def test_single_block_construction():
 
     with pytest.raises(KeyError):
         star["single_2"]
+    assert star["single_0"]["new_key"] == "new_value"
+    with pytest.raises(KeyError):
+        star["single_0"]["key1"]
 
+def test_single_block_construction_from_any():
+    star = empty_star()
+    star.with_single_block(name="single", data={"key1": 42})
+    star["single"] = pd.DataFrame({"key1": [42], "key2": ["value"]})
+    assert star["single"].trust_single().to_dict() == {"key1": 42, "key2": "value"}
+    star["single"] = pl.DataFrame({"key1": [42], "key2": ["value"]})
+    assert star["single"].trust_single().to_dict() == {"key1": 42, "key2": "value"}
+    star["single"] = np.array([(42, "value")], dtype=[("key1", np.int32), ("key2", "U10")])
+    assert star["single"].trust_single().to_dict() == {"key1": 42, "key2": "value"}
 
 def test_loop_block_construction():
     star = empty_star()

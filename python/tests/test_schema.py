@@ -198,6 +198,33 @@ def test_field_default_loop():
     assert m.block_0.b is None
     assert df["A"].tolist() == [1, 2, 3]
 
+def test_pandas_object_type_column(tmpdir):
+    from starfile_rs.schema.pandas import LoopDataModel, StarModel, Field, Series
+
+    class Block(LoopDataModel):
+        value: Series[object] = Field()
+
+    class MyModel(StarModel):
+        block: Block = Field()
+
+    m = MyModel.validate_text(
+        "data_block\n"
+        "loop_\n"
+        "_value\n"
+        "'string'\n"
+        "42\n"
+        "3.14\n"
+    )
+    save_path = tmpdir / "output.star"
+    assert m.block.dataframe.dtypes["value"] == "object"
+    # object column is parsed as str
+    assert m.block.dataframe["value"].tolist() == ["string", "42", "3.14"]
+
+    m = MyModel.validate_dict({"block": {"value": ["string", 42, 3.14]}})
+    m.write(save_path)
+    m2 = MyModel.validate_file(save_path)
+    assert m2.block.dataframe.dtypes["value"] == "object"
+    assert m2.block.dataframe["value"].tolist() == ["string", "42", "3.14"]
 
 def test_repr():
     from starfile_rs.schema.pandas import LoopDataModel, StarModel, Field, Series
@@ -215,3 +242,42 @@ def test_repr():
     assert MyModel.fsc is m.__starfile_fields__["fsc"]
     repr(MyModel.general)
     repr(MyModel.fsc)
+
+def test_extra():
+    from starfile_rs.schema.pandas import StarModel, Field
+
+    incoming_dict = {
+        "general": {
+            "rlnFinalResolution": 10,
+            "rlnMaskName": "mask.mrc",
+            "rlnRandomiseFrom": "0",
+        },
+        "extra_field": {
+            "some_value": 42
+        },
+        "another_extra": pd.DataFrame({"a": [1, 2], "b": [3, 4]}),
+    }
+
+    class MyModel(StarModel, extra="forbid"):
+        general: General = Field()
+
+    with pytest.raises(ValidationError):
+        MyModel.validate_dict(incoming_dict)
+
+    class MyModel(StarModel, extra="ignore"):
+        general: General = Field()
+
+    m = MyModel.validate_dict(incoming_dict)
+    assert m.general.final_res == 10
+    assert list(m.to_star_dict().keys()) == ["general"]
+
+    class MyModel(StarModel, extra="allow"):
+        general: General = Field()
+
+    m = MyModel.validate_dict(incoming_dict)
+    assert m.general.final_res == 10
+    star = m.to_star_dict()
+    assert list(star.keys()) == ["general", "extra_field", "another_extra"]
+    assert star["extra_field"].trust_single().to_dict() == {"some_value": 42}
+    assert star["another_extra"].columns == ["a", "b"]
+    assert star["another_extra"].trust_loop().to_pandas().to_dict(orient="list") == {"a": [1, 2], "b": [3, 4]}

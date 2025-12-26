@@ -67,8 +67,8 @@ class DataBlock(ABC):
             if self._rust_obj.loop_nrows() != 1 or not allow_conversion:
                 return None
             return SingleDataBlock(self._rust_obj.as_single())
-        else:
-            return None
+        else:  # pragma: no cover
+            raise RuntimeError("Unreachable code reached in DataBlock.try_single()")
 
     def trust_loop(self, allow_conversion: bool = True) -> "LoopDataBlock":
         """Convert this data block to a loop data block.
@@ -254,7 +254,7 @@ class LoopDataBlock(DataBlock):
     ) -> "pd.DataFrame":
         """Convert the data block to a pandas DataFrame."""
         if string_columns:
-            dtype = {col: "string" for col in string_columns}
+            dtype = {col: str for col in string_columns}
         else:
             dtype = None
         return self._to_pandas_impl(dtype=dtype, names=self.columns)
