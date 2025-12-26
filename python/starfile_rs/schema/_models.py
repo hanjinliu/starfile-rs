@@ -68,7 +68,11 @@ class StarModel(_SchemaBase):
         if STARFILE_CONSTRUCT_KEY in kwargs:
             self._block_models = kwargs[STARFILE_CONSTRUCT_KEY]
         else:
-            other = type(self).validate_dict(kwargs)
+            name_map = {
+                name: f.block_name for name, f in self.__starfile_fields__.items()
+            }
+            kwargs_renamed = {name_map.get(k, k): v for k, v in kwargs.items()}
+            other = type(self).validate_dict(kwargs_renamed)
             self._block_models = other._block_models
 
     def __init_subclass__(cls, extra: ExtraType = "ignore"):
@@ -198,8 +202,12 @@ class BaseBlockModel(_SchemaBase):
         if STARFILE_CONSTRUCT_KEY in kwargs:
             self._block = kwargs[STARFILE_CONSTRUCT_KEY]
         else:
-            # create an unnamed DataBlock from kwargs
-            self._block = type(self)._parse_block("", kwargs)
+            # Create an unnamed DataBlock from kwargs
+            name_map = {
+                name: f.column_name for name, f in self.__starfile_fields__.items()
+            }
+            kwargs_renamed = {name_map.get(k, k): v for k, v in kwargs.items()}
+            self._block = type(self)._parse_block("", kwargs_renamed)
 
     @classmethod
     def validate_block(cls, value: Any) -> Self:
@@ -214,7 +222,7 @@ class BaseBlockModel(_SchemaBase):
         if missing:
             # If this model has no attributes, validation error will not be raised here.
             raise BlockValidationError(
-                f"Block {block.name} did not pass validation by {cls.__name__!r}: "
+                f"Block {block.name!r} did not pass validation by {cls.__name__!r}: "
                 f"missing columns: {missing}"
             )
         return cls(**{STARFILE_CONSTRUCT_KEY: block})
@@ -261,6 +269,7 @@ class AnyBlock(BaseBlockModel):
 _DF = TypeVar("_DF")
 
 
+@dataclass_transform(field_specifiers=(Field,))
 class LoopDataModel(BaseBlockModel, Generic[_DF]):
     """Schema model for a loop data block."""
 
@@ -307,6 +316,8 @@ class LoopDataModel(BaseBlockModel, Generic[_DF]):
 
     @classmethod
     def _parse_block(cls, name: str, value: Any) -> LoopDataBlock:
+        if isinstance(value, cls):
+            return value._block
         if not isinstance(value, DataBlock):
             block = cls._parse_object(name, value)
         elif (block := value.try_loop()) is None:
@@ -329,6 +340,7 @@ class LoopDataModel(BaseBlockModel, Generic[_DF]):
         raise NotImplementedError  # pragma: no cover
 
 
+@dataclass_transform(field_specifiers=(Field,))
 class SingleDataModel(BaseBlockModel):
     """Schema model for a single data block."""
 
@@ -347,6 +359,8 @@ class SingleDataModel(BaseBlockModel):
 
     @classmethod
     def _parse_block(cls, name: str, value: Any) -> LoopDataBlock:
+        if isinstance(value, cls):
+            return value._block
         if not isinstance(value, DataBlock):
             block = SingleDataBlock._from_any(name, value)
         elif (block := value.try_single()) is None:

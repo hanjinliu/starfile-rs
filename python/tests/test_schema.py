@@ -306,7 +306,7 @@ def test_setting_dataframe():
 
     class MyModel(StarModel, extra="allow"):
         general: General = Field()
-        one_loop: OneLoop = Field("loop_1")
+        one_loop: OneLoop = Field("loop_1")  # type: ignore
 
     m = MyModel.validate_dict(
         {
@@ -351,3 +351,34 @@ def test_setting_dataframe():
         }
     )
     assert m.one_loop.dataframe["rlnCoordinateX"].min() < -50.0
+
+def test_dataclass_like_init():
+    from starfile_rs.schema.pandas import Field, LoopDataModel, Series
+
+    class OneLoop(LoopDataModel):
+        x: Series[float] = Field("rlnCoordinateX")
+        y: Series[float] = Field("rlnCoordinateY")
+        z: Series[float] = Field("rlnCoordinateZ")
+
+    class MyModel(StarModel, extra="allow"):
+        general: General = Field()
+        one_loop: OneLoop = Field("loop_1")
+
+    m = MyModel(
+        general=General(
+            final_res=15.0,
+            rlnMaskName="mask2.mrc",
+            randomise_from="2.0",
+        ),
+        one_loop=OneLoop(
+            x=pd.Series([1.0, 2.0, 3.0]),
+            y=pd.Series([4.0, 5.0, 6.0]),
+            z=pd.Series([7.0, 8.0, 9.0]),
+        ),
+    )
+    assert m.general.final_res == 15.0
+    assert m.general.rlnMaskName == "mask2.mrc"
+    assert m.general.randomise_from == "2.0"
+    assert m.one_loop.x.tolist() == pytest.approx([1.0, 2.0, 3.0])
+    assert m.one_loop.y.tolist() == pytest.approx([4.0, 5.0, 6.0])
+    assert m.one_loop.z.tolist() == pytest.approx([7.0, 8.0, 9.0])
