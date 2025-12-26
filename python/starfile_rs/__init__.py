@@ -1,4 +1,3 @@
-from starfile_rs.io import StarReader
 from starfile_rs.core import (
     read_star,
     read_star_block,
@@ -9,7 +8,6 @@ from starfile_rs.core import (
 from starfile_rs.components import SingleDataBlock, LoopDataBlock, DataBlock
 
 __all__ = [
-    "StarReader",
     "read_star",
     "read_star_text",
     "read_star_block",

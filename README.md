@@ -7,9 +7,11 @@
 [![codecov](https://codecov.io/gh/hanjinliu/starfile-rs/graph/badge.svg?token=X1F259JYT5)](https://codecov.io/gh/hanjinliu/starfile-rs)
 
 
-A blazing-fast and type-safe STAR file reader and writer powered by Rust (as a successor of [`starfile`](https://github.com/teamtomo/starfile)). This package implements interface with [`pandas`](https://github.com/pandas-dev/pandas), [`polars`](https://github.com/pola-rs/polars) and [`numpy`](https://github.com/numpy/numpy) for modern data manipulation.
+A blazing-fast and type-safe STAR file reader and writer powered by Rust (as a successor of [`starfile`](https://github.com/teamtomo/starfile)).
 
-## Installation
+This package implements interface with [`pandas`](https://github.com/pandas-dev/pandas), [`polars`](https://github.com/pola-rs/polars) and [`numpy`](https://github.com/numpy/numpy) for modern data manipulation, and the [`pydantic`](https://github.com/pydantic/pydantic)-like [schema validation](https://github.com/hanjinliu/starfile-rs?tab=readme-ov-file#schema-validation) for improved IDE autocompletion and safety of attribute access.
+
+## :computer: Installation
 
 ```bash
 pip install starfile-rs[pandas]  # for pandas support
@@ -25,7 +27,7 @@ pip install -e .[pandas]  # for pandas support
 pip install -e .[polars]  # for polars support
 ```
 
-## Highlights
+## :sunny: Highlights
 
 ### Easy to Use
 
