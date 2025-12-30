@@ -60,8 +60,12 @@ class LoopDataModel(LoopDataModelBase[pd.DataFrame]):
                 else:
                     dtype.pop(f.column_name)
 
-        names = list(dtype.keys())
-        usecols = [block.columns.index(name) for name in names]
+        names: list[str] = []
+        usecols: list[int] = []
+        for ith, name in enumerate(block.columns):
+            if name in dtype:
+                names.append(name)
+                usecols.append(ith)
         return block.trust_loop()._to_pandas_impl(
             usecols=usecols, names=names, dtype=dtype
         )

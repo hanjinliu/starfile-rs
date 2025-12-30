@@ -49,11 +49,17 @@ class LoopDataModel(LoopDataModelBase[pl.DataFrame]):
                 else:
                     schema.pop(f.column_name)
 
-        new_columns: list[int] = []
+        field_names: set[str] = set()
         for f in fields:
             schema[f.column_name] = _type_to_schema(f._get_annotation_arg())
-            new_columns.append(f.column_name)
-        columns = [block.columns.index(name) for name in new_columns]
+            field_names.add(f.column_name)
+
+        new_columns: list[str] = []
+        columns: list[int] = []
+        for ith, name in enumerate(block.columns):
+            if name in field_names:
+                columns.append(ith)
+                new_columns.append(name)
         return block.trust_loop()._to_polars_impl(
             columns=columns,
             new_columns=new_columns,
