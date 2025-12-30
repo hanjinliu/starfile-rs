@@ -417,3 +417,25 @@ def test_dataclass_like_init(
     assert list(m.one_loop.x) == pytest.approx([1.0, 2.0, 3.0])
     assert list(m.one_loop.y) == pytest.approx([4.0, 5.0, 6.0])
     assert list(m.one_loop.z) == pytest.approx([7.0, 8.0, 9.0])
+
+def test_type_error():
+    """Unexpected fields in StarModel should raise TypeError."""
+    class MyModel(StarModel):
+        general: General = Field("general")
+
+    with pytest.raises(TypeError, match="unexpected"):
+        MyModel(
+            general=General(
+                final_res=15.0,
+                rlnMaskName="mask2.mrc",
+                randomise_from="2.0",
+            ),
+            unexpected_field=42,  # type: ignore
+        )
+
+    with pytest.raises(TypeError, match="unexpected"):
+        General(
+            final_res=15.0,
+            unexpected_field="oops",  # type: ignore
+            randomise_from="2.0",
+        ),

@@ -28,6 +28,7 @@ from starfile_rs.schema._exception import BlockValidationError, ValidationError
 
 if TYPE_CHECKING:
     from typing import Self, dataclass_transform
+    import os
 else:
 
     def dataclass_transform(*args, **kwargs):
@@ -71,6 +72,7 @@ class StarModel(_SchemaBase):
             name_map = {
                 name: f.block_name for name, f in self.__starfile_fields__.items()
             }
+            _check_unexpected_kwargs(type(self), name_map, kwargs)
             kwargs_renamed = {name_map.get(k, k): v for k, v in kwargs.items()}
             other = type(self).validate_dict(kwargs_renamed)
             self._block_models = other._block_models
@@ -148,7 +150,7 @@ class StarModel(_SchemaBase):
         return cls(**{STARFILE_CONSTRUCT_KEY: star_input_sorted})
 
     @classmethod
-    def validate_file(cls, path) -> Self:
+    def validate_file(cls, path: os.PathLike) -> Self:
         """Read a STAR file and validate it against this StarModel schema."""
         required = {f.block_name for f in cls.__starfile_fields__.values()}
         mapping = {}
@@ -206,6 +208,7 @@ class BaseBlockModel(_SchemaBase):
             name_map = {
                 name: f.column_name for name, f in self.__starfile_fields__.items()
             }
+            _check_unexpected_kwargs(type(self), name_map, kwargs)
             kwargs_renamed = {name_map.get(k, k): v for k, v in kwargs.items()}
             self._block = type(self)._parse_block("", kwargs_renamed)
 
@@ -242,7 +245,9 @@ class BaseBlockModel(_SchemaBase):
     @classmethod
     def validate_file(cls, path) -> Self:
         it = iter_star_blocks(path)
-        first_block = next(it)
+        first_block = next(it, None)
+        if first_block is None:
+            raise BlockValidationError(f"File {path} contains no blocks.")
         if next(it, None) is not None:
             raise BlockValidationError(f"File {path} contains multiple blocks.")
         return cls.validate_block(first_block)
@@ -373,3 +378,13 @@ class SingleDataModel(BaseBlockModel):
     def block(self) -> SingleDataBlock:
         """Return the underlying SingleDataBlock."""
         return self._block
+
+
+def _check_unexpected_kwargs(
+    cls: type,
+    allowed: dict[str, Any],
+    kwargs: dict[str, Any],
+) -> None:
+    if any(k not in allowed for k in kwargs):
+        unexpected = ", ".join(repr(k) for k in kwargs if k not in allowed)
+        raise TypeError(f"{cls.__name__} got unexpected fields: {unexpected}")
