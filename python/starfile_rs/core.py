@@ -19,27 +19,36 @@ if TYPE_CHECKING:
 
 
 def read_star(path: "str | os.PathLike") -> "StarDict":
-    """Read a STAR file and return its contents as a StarFileData object."""
+    """Read a STAR file and return its contents as a StarDict object."""
+    _check_path_exists(path)
     return StarDict.from_star(path)
 
 
 def read_star_text(content: str) -> "StarDict":
-    """Read a STAR file from a string and return its contents as a StarFileData object."""
+    """Read a STAR file from a string and return its contents as a StarDict object."""
     return StarDict.from_text(content)
 
 
-def read_star_block(path: "os.PathLike", block_name: str) -> "DataBlock":
+def read_star_block(path: "str | os.PathLike", block_name: str) -> "DataBlock":
     """Read a specific data block from a STAR file."""
+    _check_path_exists(path)
     for block in iter_star_blocks(path):
         if block.name == block_name:
             return block
     raise KeyError(f"Data block with name {block_name!r} not found in file {path!r}.")
 
 
-def iter_star_blocks(path: "os.PathLike") -> "Iterator[DataBlock]":
+def iter_star_blocks(path: "str | os.PathLike") -> "Iterator[DataBlock]":
     """Iterate over data blocks in a STAR file."""
+    _check_path_exists(path)
     with StarReader.from_filepath(path) as reader:
         yield from reader.iter_blocks()
+
+
+def _check_path_exists(path: "str | os.PathLike") -> None:
+    """Just to make tracebacks cleaner and more informative."""
+    if not Path(path).exists():
+        raise FileNotFoundError(f"File {path!r} does not exist.")
 
 
 def empty_star() -> "StarDict":
