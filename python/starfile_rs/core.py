@@ -189,10 +189,13 @@ class StarDict(MutableMapping[str, "DataBlock"]):
         return len(self._blocks)
 
     def __repr__(self) -> str:
+        return f"<{self.__class__.__name__} of blocks={self._block_repr_dict()!r}>"
+
+    def _block_repr_dict(self) -> dict[str, str]:
         d = {}
         for name, block in self._blocks.items():
             d[name] = block.__class__.__name__
-        return f"<{self.__class__.__name__} of blocks={d!r}>"
+        return d
 
     def rename(self, mapping: dict[str, str]) -> "StarDict":
         """Rename data blocks in the STAR file in place.
