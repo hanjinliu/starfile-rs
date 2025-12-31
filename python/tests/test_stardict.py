@@ -338,9 +338,50 @@ def test_clone():
     ]
 )
 def test_compat(path, tmpdir):
-    star = compat.read(path)
+    star = compat.read(path, df="pandas")
+    compat.write(star, tmpdir / "out.star")
+    star = compat.read(path, df="polars")
+    compat.write(star, tmpdir / "out.star")
+    star = compat.read(path, always_dict=True)
+    assert isinstance(star, compat.CachedDict)
+    compat.write(star, tmpdir / "out.star")
     star = compat.read(path, read_n_blocks=1)
     compat.write(star, tmpdir / "out.star")
+
+@pytest.mark.parametrize("df", ["pandas", "polars"])
+def test_compat_cache(df):
+    star = compat.read(postprocess, always_dict=True, df=df)
+    assert isinstance(star, compat.CachedDict)
+    assert len(star) == 3
+    assert list(star) == ["general", "fsc", "guinier"]
+    assert len(star._cache) == 0
+    assert "fsc" in star
+    assert len(star._cache) == 0
+    fsc = star["fsc"]
+    assert "fsc" in star._cache
+    if df == "pandas":
+        assert isinstance(fsc, pd.DataFrame)
+    else:
+        assert isinstance(fsc, pl.DataFrame)
+    assert star["fsc"] is fsc  # from cache
+    del star["fsc"]
+    assert len(star._cache) == 0
+    with pytest.raises(KeyError):
+        star["fsc"]
+    star["fsc"] = fsc
+    assert "fsc" in star
+
+    assert "general" not in star._cache
+    assert isinstance(star["general"], dict)
+    assert "general" in star._cache
+
+def test_cache_dict_repr():
+    star = compat.read(postprocess, always_dict=True)
+    repr_str = repr(star)
+    assert "CachedDict" in repr_str
+    assert "blocks=" in repr_str
+    star._repr_html_()
+    assert star._ipython_key_completions_() == list(star.keys())
 
 def test_ipython_methods():
     star = as_star(
