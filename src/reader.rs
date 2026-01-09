@@ -117,6 +117,7 @@ impl<R: BufRead> Iterator for StarBufIter<R> {
                     if line.is_empty() {
                         continue; // Skip empty lines
                     } else if line.starts_with("data_") {
+                        // Start of a new data block
                         let data_block_name = line[5..].to_string();
                         let returned = parse_block(&mut self.reader);
                         match returned {
@@ -158,7 +159,11 @@ fn parse_block<R: io::BufRead>(mut reader: &mut R) -> io::Result<(String, BlockD
                     let mut all_scalars = vec![scalar_first];
                     all_scalars.extend(scalars);
                     return Ok((rem, BlockData::Simple(all_scalars)))
-                } else {
+                } else if line.starts_with("data_") {
+                    // Start of next block
+                    return Ok((buf.to_string(), BlockData::Simple(Vec::new())));
+                }
+                else {
                     // Unexpected line, stop parsing
                     return Err(err_internal());
                 }
@@ -225,13 +230,21 @@ fn parse_loop_block<R: io::BufRead>(reader: &mut R) -> io::Result<(String, LoopD
                 } else if buf_trim.starts_with("_") {
                     column_names.push(remove_comment(&buf_trim[1..]).to_string());
                 } else {
-                    // Reached data section
+                    // Reached next data section
                     break buf.to_string();
                 }
             }
             Err(e) => return Err(e),
         }
     };
+
+    if last_line.starts_with("data_") {
+        // This happens when there is no data row in the loop block
+        return Ok((
+            last_line,
+            LoopData::new(column_names, "".to_string(), 0),
+        ));
+    }
 
     // Parse data rows
     let line_remained = loop {

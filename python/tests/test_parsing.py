@@ -4,8 +4,7 @@ import pandas as pd
 import polars as pl
 import pytest
 
-from starfile_rs import read_star, SingleDataBlock, LoopDataBlock
-from starfile_rs.core import read_star_block
+from starfile_rs import read_star, SingleDataBlock, LoopDataBlock, read_star_block, read_star_text
 from .constants import (
     loop_simple,
     postprocess,
@@ -298,3 +297,44 @@ def test_parse_as_string():
     # check 'rlnResolution' is parsed as string in fsc (loop) block
     df_pl = star['fsc'].to_polars(string_columns=string_columns)
     assert df_pl['rlnResolution'].dtype == pl.String
+
+def test_parse_empty_single():
+    star_text = [
+        "data_A",
+        "",
+        "data_B",
+        "_t 3",
+    ]
+    star_text = "\n".join(star_text)
+
+    star = read_star_text(star_text)
+    assert list(star.keys()) == ['A', 'B']
+    assert star["A"].trust_single().to_dict() == {}
+    assert star["B"].trust_single().to_dict() == {'t': 3.0}
+    assert bool(star["A"])
+
+def test_parse_empty_loop():
+    star_text = [
+        "data_A",
+        "",
+        "loop_",
+        "_a #1",
+        "_b #2",
+        "",
+        "",
+        "data_B",
+        "loop_",
+        "_t #1",
+        "1",
+        "2",
+        "3",
+    ]
+    star_text = "\n".join(star_text)
+
+    star = read_star_text(star_text)
+    assert list(star.keys()) == ['A', 'B']
+    assert star["A"].columns == ['a', 'b']
+    assert star["A"].trust_loop().shape == (0, 2)
+    assert star["B"].columns == ['t']
+    assert star["B"].trust_loop().shape == (3, 1)
+    assert bool(star["A"])
