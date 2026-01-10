@@ -68,18 +68,46 @@ def read(
     *,
     df: Literal["pandas", "polars"] = "pandas",
 ):
-    """Read a STAR file and return its contents as a StarDict object."""
-    blocks = []
+    """Read data from a STAR file.
+
+    Single data blocks are read as dictionaries. Loop blocks are read as dataframes.
+    When multiple data blocks are present a dictionary of datablocks is
+    returned. When a single datablock is present only the block is returned by default.
+    To force returning a dectionary even when only one datablock is present set
+    `always_dict=True`.
+
+    The dictionary returned by this function is cached. DataFrame parsing occurs only
+    when a block is accessed for the first time.
+
+    Parameters
+    ----------
+    filename: PathLike
+        File from which to read data.
+    read_n_blocks: int, optional
+        Limit reading the file to the first n data blocks.
+    always_dict: bool
+        Always return a dictionary, even when only a single data block is present.
+    parse_as_string: list[str]
+        A list of keys or column names which will not be coerced to numeric values.
+    df: "pandas" or "polars", default "pandas"
+        The dataframe library to use when parsing loop blocks.
+    """
+    # prepare parser function
     if df == "pandas":
         _parser = partial(_parse_pandas, string_columns=parse_as_string)
     elif df == "polars":
         _parser = partial(_parse_polars, string_columns=parse_as_string)
     else:
         raise ValueError(f"Unsupported df type: {df}")
+
+    # prepare blocks
+    blocks = []
     for ith, block in enumerate(StarReader.from_filepath(filename).iter_blocks()):
         blocks.append(block)
         if read_n_blocks is not None and ith + 1 >= read_n_blocks:
             break
+
+    # construct StarDict
     star = StarDict.from_blocks(blocks)
     if len(star) == 1 and not always_dict:
         if isinstance(first_block := star.first(), LoopDataBlock):
@@ -89,14 +117,6 @@ def read(
         else:  # pragma: no cover
             raise RuntimeError("Unreachable code path.")
     return CachedDict(star, _parser)
-
-
-def _parse_pandas(block: LoopDataBlock, string_columns) -> "pd.DataFrame":
-    return block.to_pandas(string_columns=string_columns)
-
-
-def _parse_polars(block: LoopDataBlock, string_columns) -> "pl.DataFrame":
-    return block.to_polars(string_columns=string_columns)
 
 
 def write(
@@ -111,6 +131,14 @@ def write(
     else:
         star = as_star(star_dict)
     star.write(filename)
+
+
+def _parse_pandas(block: LoopDataBlock, string_columns) -> "pd.DataFrame":
+    return block.to_pandas(string_columns=string_columns)
+
+
+def _parse_polars(block: LoopDataBlock, string_columns) -> "pl.DataFrame":
+    return block.to_polars(string_columns=string_columns)
 
 
 _DF = TypeVar("_DF", "pd.DataFrame", "pl.DataFrame")

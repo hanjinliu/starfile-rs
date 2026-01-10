@@ -142,20 +142,6 @@ impl<R: BufRead> Iterator for StarBufIter<R> {
     }
 }
 
-struct ParsedBlock {
-    line_remained: String,
-    block_data: BlockData,
-}
-
-impl ParsedBlock {
-    fn new(line_remained: String, block_data: BlockData) -> Self {
-        Self {
-            line_remained,
-            block_data,
-        }
-    }
-}
-
 fn parse_block<R: io::BufRead>(
     mut reader: &mut R,
     max_num_rows: usize,
@@ -312,4 +298,18 @@ fn err_internal() -> io::Error {
         io::ErrorKind::InvalidData,
         "Error reading line while parsing block",
     )
+}
+
+struct ParsedBlock {
+    line_remained: String,
+    block_data: BlockData,
+}
+
+impl ParsedBlock {
+    fn new(line_remained: String, block_data: BlockData) -> Self {
+        Self {
+            line_remained,
+            block_data,
+        }
+    }
 }
