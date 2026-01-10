@@ -468,3 +468,25 @@ def test_frozen_fields():
         m.loop.x = [10.0, 20.0]  # should be allowed in the future
     with pytest.raises(AttributeError):
         m.loop.y = [40.0, 50.0]  # not allowed
+
+def test_write_with_empty_fields(tmpdir):
+    from starfile_rs.schema.pandas import LoopDataModel, Series
+
+    class OneLoop(LoopDataModel):
+        x: Series[float] = Field("rlnCoordinateX")
+        y: Series[float] = Field("rlnCoordinateY", default=None)
+
+    class MyModel(StarModel):
+        loop: OneLoop = Field()
+
+    m = MyModel(
+        loop=OneLoop(
+            x=[1.0, 2.0, 3.0],
+        ),
+    )
+
+    save_path = tmpdir / "output.star"
+    m.write(save_path)
+    m2 = MyModel.validate_file(save_path)
+    assert m2.loop.dataframe.shape == (3, 1)
+    assert "rlnCoordinateY" not in m2.loop.dataframe.columns

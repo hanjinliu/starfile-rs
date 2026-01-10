@@ -1,6 +1,7 @@
 use pyo3::prelude::*;
 use std::fs::File;
 use std::io::{self, BufRead};
+use std::usize;
 use crate::blocks::{DataBlock, BlockData, Scalar, LoopData};
 
 #[pyclass]
@@ -119,11 +120,11 @@ impl<R: BufRead> Iterator for StarBufIter<R> {
                     } else if line.starts_with("data_") {
                         // Start of a new data block
                         let data_block_name = line[5..].to_string();
-                        let returned = parse_block(&mut self.reader);
+                        let returned = parse_block(&mut self.reader, usize::MAX);
                         match returned {
-                            Ok((rem, btype)) => {
-                                let block = DataBlock::new(data_block_name.clone(), btype);
-                                self.line_remained = rem;
+                            Ok(returned) => {
+                                let block = DataBlock::new(data_block_name.clone(), returned.block_data);
+                                self.line_remained = returned.line_remained;
                                 if block.block_type.is_eof() {
                                     return None;
                                 }
@@ -141,27 +142,44 @@ impl<R: BufRead> Iterator for StarBufIter<R> {
     }
 }
 
-fn parse_block<R: io::BufRead>(mut reader: &mut R) -> io::Result<(String, BlockData)> {
+struct ParsedBlock {
+    line_remained: String,
+    block_data: BlockData,
+}
+
+impl ParsedBlock {
+    fn new(line_remained: String, block_data: BlockData) -> Self {
+        Self {
+            line_remained,
+            block_data,
+        }
+    }
+}
+
+fn parse_block<R: io::BufRead>(
+    mut reader: &mut R,
+    max_num_rows: usize,
+) -> io::Result<ParsedBlock> {
     loop {
         let mut buf = String::new();
         match reader.read_line(&mut buf) {
-            Ok(0) => return Ok(("".to_string(), BlockData::EOF)),  // EOF
+            Ok(0) => return Ok(ParsedBlock::new("".to_string(), BlockData::EOF)),  // EOF
             Ok(_) => {
                 let line = remove_comment(&buf).trim_end().to_string();
                 if line.is_empty() {
                     continue; // Skip empty lines
                 } else if line.starts_with("loop_") {
-                    let (rem, columns) = parse_loop_block(&mut reader)?;
-                    return Ok((rem, BlockData::Loop(columns)))
+                    let (rem, columns) = parse_loop_block(&mut reader, max_num_rows)?;
+                    return Ok(ParsedBlock::new(rem, BlockData::Loop(columns)))
                 } else if line.starts_with("_") {
                     let scalar_first = Scalar::from_line(&line);
                     let (rem, scalars) = parse_simple_block(&mut reader)?;
                     let mut all_scalars = vec![scalar_first];
                     all_scalars.extend(scalars);
-                    return Ok((rem, BlockData::Simple(all_scalars)))
+                    return Ok(ParsedBlock::new(rem, BlockData::Simple(all_scalars)))
                 } else if line.starts_with("data_") {
                     // Start of next block
-                    return Ok((buf.to_string(), BlockData::Simple(Vec::new())));
+                    return Ok(ParsedBlock::new(buf.to_string(), BlockData::Simple(Vec::new())));
                 }
                 else {
                     // Unexpected line, stop parsing
@@ -209,11 +227,13 @@ fn parse_simple_block<R: io::BufRead>(reader: &mut R) -> io::Result<(String, Vec
     Ok((line_remained, scalars))
 }
 
-fn parse_loop_block<R: io::BufRead>(reader: &mut R) -> io::Result<(String, LoopData)> {
+fn parse_loop_block<R: io::BufRead>(
+    reader: &mut R,
+    max_num_rows: usize,
+) -> io::Result<(String, LoopData)> {
     let mut column_names = Vec::<String>::new();
 
     // Parse column names
-    let mut nrows = 1;
     let mut last_line = loop {
         let mut buf = String::new();
         match reader.read_line(&mut buf) {
@@ -247,10 +267,12 @@ fn parse_loop_block<R: io::BufRead>(reader: &mut R) -> io::Result<(String, LoopD
     }
 
     // Parse data rows
+    let mut nrows = 1;
+    let mut buf = String::new();
     let line_remained = loop {
         // NOTE: Using push_str is more efficient than Vec<String>, but less flexible
         // if we want to access individual rows or to insert rows later.
-        let mut buf = String::new();
+        buf.clear();
         match reader.read_line(&mut buf) {
             Ok(0) => break "".to_string(), // EOF
             Ok(_) => {
@@ -264,6 +286,9 @@ fn parse_loop_block<R: io::BufRead>(reader: &mut R) -> io::Result<(String, LoopD
                 }
             }
             Err(e) => return Err(e),
+        }
+        if nrows >= max_num_rows {
+            break "".to_string(); // Reached max number of rows
         }
     };
     Ok((line_remained, LoopData::new(column_names, last_line, nrows)))
