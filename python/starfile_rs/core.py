@@ -297,10 +297,10 @@ class StarDict(MutableMapping[str, "DataBlock"]):
 
     def to_string(self, comment: str | None = None) -> str:
         """Convert the STAR file contents to a string."""
-        strings = []
-        for name, block in self._blocks.items():
-            strings.append(f"\ndata_{name}\n\n")
-            strings.append(block.to_string())
+        strings: list[str] = []
+        for block in self._blocks.values():
+            strings.append("\n")
+            strings.append(block.to_string(block_title=True))
             strings.append("\n")
         if comment:
             strings.insert(0, f"# {comment}\n")
