@@ -11,6 +11,8 @@ A blazing-fast and type-safe STAR file reader and writer powered by Rust (as a s
 
 This package implements interface with [`pandas`](https://github.com/pandas-dev/pandas), [`polars`](https://github.com/pola-rs/polars) and [`numpy`](https://github.com/numpy/numpy) for modern data manipulation, and the [`pydantic`](https://github.com/pydantic/pydantic)-like [schema validation](https://github.com/hanjinliu/starfile-rs?tab=readme-ov-file#schema-validation) for improved IDE autocompletion and safety of attribute access.
 
+For `starfile` users, please try `from starfile_rs.compat import read` to replace `starfile.read` with minimal code changes while enjoying better performance.
+
 ## :computer: Installation
 
 ```bash

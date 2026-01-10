@@ -284,24 +284,6 @@ class LoopDataBlock(DataBlock):
             dtype = None
         return self._to_pandas_impl(dtype=dtype, names=self.columns)
 
-    def _to_pandas_impl(self, **kwargs) -> "pd.DataFrame":
-        """Convert the data block to a pandas DataFrame."""
-        import pandas as pd
-
-        # NOTE: converting multiple whitespaces to a single space for pandas read_csv
-        # performs better
-        sep = " "
-        return pd.read_csv(
-            self._as_buf(sep),
-            delimiter=sep,
-            header=None,
-            comment="#",
-            keep_default_na=False,
-            na_values=_NAN_STRINGS,
-            engine="c",
-            **kwargs,
-        )
-
     def to_polars(
         self,
         string_columns: list[str] = [],
@@ -315,26 +297,6 @@ class LoopDataBlock(DataBlock):
             schema_overrides = None
         return self._to_polars_impl(
             schema_overrides=schema_overrides, new_columns=self.columns
-        )
-
-    def _to_polars_impl(self, **kwargs) -> "pl.DataFrame":
-        """Convert the data block to a polars DataFrame."""
-        import polars as pl
-
-        # polars does not support reading empty data.
-        if self._rust_obj.loop_nrows() == 0:
-            return pl.DataFrame(
-                {col: pl.Series([], dtype=pl.Unknown) for col in self.columns}
-            )
-
-        sep = " "
-        return pl.read_csv(
-            self._as_buf(sep),
-            separator=sep,
-            has_header=False,
-            comment_prefix="#",
-            null_values=_NAN_STRINGS,
-            **kwargs,
         )
 
     def to_numpy(
@@ -601,6 +563,44 @@ class LoopDataBlock(DataBlock):
     def _as_buf(self, new_sep: str) -> StringIO:
         value = self._rust_obj.loop_content_with_sep(new_sep).replace("'", '"')
         return StringIO(value)
+
+    def _to_pandas_impl(self, **kwargs) -> "pd.DataFrame":
+        """Convert the data block to a pandas DataFrame."""
+        import pandas as pd
+
+        # NOTE: converting multiple whitespaces to a single space for pandas read_csv
+        # performs better
+        sep = " "
+        return pd.read_csv(
+            self._as_buf(sep),
+            delimiter=sep,
+            header=None,
+            comment="#",
+            keep_default_na=False,
+            na_values=_NAN_STRINGS,
+            engine="c",
+            **kwargs,
+        )
+
+    def _to_polars_impl(self, **kwargs) -> "pl.DataFrame":
+        """Convert the data block to a polars DataFrame."""
+        import polars as pl
+
+        # polars does not support reading empty data.
+        if self._rust_obj.loop_nrows() == 0:
+            return pl.DataFrame(
+                {col: pl.Series([], dtype=pl.Unknown) for col in self.columns}
+            )
+
+        sep = " "
+        return pl.read_csv(
+            self._as_buf(sep),
+            separator=sep,
+            has_header=False,
+            comment_prefix="#",
+            null_values=_NAN_STRINGS,
+            **kwargs,
+        )
 
 
 _NAN_STRINGS = ["nan", "NaN", "<NA>"]
