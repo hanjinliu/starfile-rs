@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Literal, TypeVar, get_args, get_origin, overload
 
-from starfile_rs import DataBlock
+from starfile_rs import DataBlock, SingleDataBlock
 
 if TYPE_CHECKING:
     from typing import Self
@@ -186,11 +186,27 @@ class LoopField(_BlockComponentField):
             )
         return instance.dataframe[self.column_name]
 
+    def __set__(
+        self,
+        instance: BaseBlockModel,
+        value: Any,
+    ) -> None:
+        if self._frozen:
+            raise AttributeError(
+                f"Field '{self._field_name}' is frozen and cannot be modified."
+            )
+        raise NotImplementedError(
+            "Overwriting a column in a loop block is not supported yet. Please set the "
+            "entire block with a new DataFrame instead."
+        )
+
     def _get_annotation_arg(self) -> type[_T]:
+        """Get the type argument T from Series[T] annotation."""
         _, arg = split_series_annotation(self._annotation)
         return arg
 
     def _get_annotation_arg_name(self) -> str:
+        """Get the name of the type argument T from Series[T] annotation."""
         arg = self._get_annotation_arg()
         return getattr(arg, "__name__", str(arg))
 
@@ -227,6 +243,21 @@ class SingleField(_BlockComponentField):
                 f"Column '{self.column_name}' has not been set in instance of {owner.__name__}"
             )
         return self.normalize_value(block[self.column_name])
+
+    def __set__(
+        self,
+        instance: BaseBlockModel,
+        value: Any,
+    ) -> None:
+        if self._frozen:
+            raise AttributeError(
+                f"Field '{self._field_name}' is frozen and cannot be modified."
+            )
+        column_value = self._validate_value(self.column_name, self.annotation, value)
+        block_old = instance._block
+        d = block_old.trust_single().to_dict()
+        d[self.column_name] = column_value
+        instance._block = SingleDataBlock.from_iterable(block_old.name, d)
 
 
 _T = TypeVar("_T")

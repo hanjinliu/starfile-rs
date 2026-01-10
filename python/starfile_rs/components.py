@@ -16,6 +16,10 @@ class DataBlock(ABC):
     def __init__(self, obj: _rs.DataBlock, /) -> None:
         self._rust_obj = obj
 
+    def __bool__(self) -> bool:
+        """Always True to use try_single() and try_loop() in a if clause."""
+        return True
+
     @property
     def name(self) -> str:
         """Name of the data block."""
@@ -91,7 +95,7 @@ class DataBlock(ABC):
             by this method. Set this to False if you only want to accept actual single
             data blocks.
         """
-        if out := self.try_loop(allow_conversion):
+        if (out := self.try_loop(allow_conversion)) is not None:
             return out
         raise ValueError(f"Data block {self.name} is not a loop data block.")
 
@@ -304,6 +308,12 @@ class LoopDataBlock(DataBlock):
         """Convert the data block to a polars DataFrame."""
         import polars as pl
 
+        # polars does not support reading empty data.
+        if self._rust_obj.loop_nrows() == 0:
+            return pl.DataFrame(
+                {col: pl.Series([], dtype=pl.Unknown) for col in self.columns}
+            )
+
         sep = " "
         return pl.read_csv(
             self._as_buf(sep),
@@ -342,6 +352,8 @@ class LoopDataBlock(DataBlock):
                     "structure_by must be one of None, 'pandas', or 'polars'."
                 )
         else:
+            if len(self) == 0:
+                return np.empty((0, len(self.columns)))
             sep = " "
             buf = self._as_buf(sep)
             arr = np.loadtxt(buf, delimiter=sep, ndmin=2, quotechar='"')
