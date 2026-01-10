@@ -143,7 +143,7 @@ class DataBlock(ABC):
         """Create a clone of the DataBlock."""
 
     @abstractmethod
-    def to_string(self) -> str:
+    def to_string(self, *, block_title: bool = True) -> str:
         """Convert the data block to a string."""
 
 
@@ -229,11 +229,24 @@ class SingleDataBlock(DataBlock, Mapping[str, Any]):
         )
         return SingleDataBlock(new_block_rs)
 
-    def to_string(self) -> str:
-        """Convert the single data block to a string."""
-        return "\n".join(
+    def to_string(
+        self,
+        *,
+        block_title: bool = True,
+    ) -> str:
+        """Convert the single data block to a string.
+
+        Parameters
+        ----------
+        block_title : bool, default True
+            If True, include the 'data_XX' title at the beginning.
+        """
+        out = "\n".join(
             f"_{n} {_python_obj_to_str(v)}" for n, v in self._rust_obj.single_to_list()
         )
+        if block_title:
+            return f"data_{self.name}\n\n{out}"
+        return out
 
 
 def _parse_python_scalar(value: str) -> Any:
@@ -559,8 +572,21 @@ class LoopDataBlock(DataBlock):
         )
         return LoopDataBlock(new_block_rs)
 
-    def to_string(self, column_numbering: bool = True) -> str:
-        """Convert the loop data block to a string."""
+    def to_string(
+        self,
+        *,
+        column_numbering: bool = True,
+        block_title: bool = True,
+    ) -> str:
+        """Convert the loop data block to a string.
+
+        Parameters
+        ----------
+        column_numbering : bool, default True
+            If True, include commented column numbering (e.g., _colname #1).
+        block_title : bool, default True
+            If True, include the 'data_XX' title at the beginning.
+        """
         if column_numbering:
             column_str = "\n".join(
                 f"_{col} #{ith + 1}" for ith, col in enumerate(self.columns)
@@ -568,6 +594,8 @@ class LoopDataBlock(DataBlock):
         else:
             column_str = "\n".join(f"_{col}" for col in self.columns)
         content = self._rust_obj.loop_content()
+        if block_title:
+            return f"data_{self.name}\n\nloop_\n{column_str}\n{content}"
         return f"loop_\n{column_str}\n{content}"
 
     def _as_buf(self, new_sep: str) -> StringIO:

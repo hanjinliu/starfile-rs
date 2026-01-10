@@ -252,9 +252,9 @@ class BaseBlockModel(_SchemaBase):
             raise BlockValidationError(f"File {path} contains multiple blocks.")
         return cls.validate_block(first_block)
 
-    def to_string(self) -> str:
+    def to_string(self, *, block_title: bool = True) -> str:
         """Convert the BlockModel to a STAR file string."""
-        return self._block.to_string()
+        return self._block.to_string(block_title=block_title)
 
 
 class AnyBlock(BaseBlockModel):
