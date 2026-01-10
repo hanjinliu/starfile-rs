@@ -338,3 +338,9 @@ def test_parse_empty_loop():
     assert star["B"].columns == ['t']
     assert star["B"].trust_loop().shape == (3, 1)
     assert bool(star["A"])
+    assert star["A"].trust_loop().to_pandas().shape == (0, 2)
+    assert star["A"].trust_loop().to_polars().shape == (0, 2)
+    assert star["A"].trust_loop().to_numpy().shape == (0, 2)
+    # NOTE: structured arrays are 1D in this case
+    assert star["A"].trust_loop().to_numpy(structure_by="pandas").shape == (0,)
+    assert star["A"].trust_loop().to_numpy(structure_by="polars").shape == (0,)

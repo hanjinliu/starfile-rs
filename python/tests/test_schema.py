@@ -438,4 +438,33 @@ def test_type_error():
             final_res=15.0,
             unexpected_field="oops",  # type: ignore
             randomise_from="2.0",
-        ),
+        )
+
+def test_frozen_fields():
+    """StarModel fields should be frozen (read-only)."""
+    from starfile_rs.schema.pandas import LoopDataModel, Series
+
+    class Single(SingleDataModel):
+        value: float = Field()
+        frozen_value: str = Field(frozen=True)
+
+    class OneLoop(LoopDataModel):
+        x: Series[float] = Field("rlnCoordinateX")
+        y: Series[float] = Field("rlnCoordinateY", frozen=True)
+
+    class MyModel(StarModel):
+        single: Single = Field()
+        loop: OneLoop = Field()
+
+    m = MyModel(
+        single=Single(value=3.14, frozen_value="fixed"),
+        loop=OneLoop(x=[1.0, 2.0], y=[4.0, 5.0]),
+    )
+    m.single.value = 2.71  # allowed
+    assert m.single.value == pytest.approx(2.71)
+    with pytest.raises(AttributeError):
+        m.single.frozen_value = "changed"  # not allowed
+    with pytest.raises(NotImplementedError):
+        m.loop.x = [10.0, 20.0]  # should be allowed in the future
+    with pytest.raises(AttributeError):
+        m.loop.y = [40.0, 50.0]  # not allowed

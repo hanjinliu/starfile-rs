@@ -311,7 +311,7 @@ class LoopDataBlock(DataBlock):
         # polars does not support reading empty data.
         if self._rust_obj.loop_nrows() == 0:
             return pl.DataFrame(
-                {col: pl.Series([], dtype=pl.String) for col in self.columns}
+                {col: pl.Series([], dtype=pl.Unknown) for col in self.columns}
             )
 
         sep = " "
@@ -352,6 +352,8 @@ class LoopDataBlock(DataBlock):
                     "structure_by must be one of None, 'pandas', or 'polars'."
                 )
         else:
+            if len(self) == 0:
+                return np.empty((0, len(self.columns)))
             sep = " "
             buf = self._as_buf(sep)
             arr = np.loadtxt(buf, delimiter=sep, ndmin=2, quotechar='"')
