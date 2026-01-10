@@ -398,6 +398,15 @@ def test_comment():
     out = star.to_string(comment=comment)
     assert out.startswith("# " + comment)
 
+def test_to_string():
+    star = empty_star()
+    star["single"] = {"key": "value"}
+    star["loop"] = pd.DataFrame({"col1": [1, 2], "col2": ["a", "b"]})
+    assert star["single"].to_string(block_title=False).startswith("_key")
+    assert star["single"].to_string(block_title=True).startswith("data_single\n")
+    assert star["loop"].to_string(block_title=False).startswith("loop_\n")
+    assert star["loop"].to_string(block_title=True).startswith("data_loop\n")
+
 def test_isinstance_check():
     assert _is_instance(pd.DataFrame({"a": [1]}), "pandas", "DataFrame")
     assert _is_instance(pl.DataFrame({"a": [1]}), "polars", "DataFrame")
