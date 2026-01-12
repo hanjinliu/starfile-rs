@@ -1,6 +1,7 @@
 use pyo3::prelude::*;
 pub mod reader;
 pub mod blocks;
+pub mod err;
 
 /// A Python module implemented in Rust.
 #[pymodule]

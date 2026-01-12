@@ -1,4 +1,7 @@
+use std::io;
+
 use pyo3::prelude::*;
+use crate::err::{err_internal};
 
 #[pyclass]
 pub struct DataBlock {
@@ -40,7 +43,7 @@ impl DataBlock {
     pub fn construct_loop_block(
         name: String,
         columns: Vec<String>,
-        content: String,
+        content: Vec<u8>,
         nrows: usize,
     ) -> Self {
         let loop_data = LoopData::new(columns, content, nrows);
@@ -125,10 +128,11 @@ impl DataBlock {
         }
     }
 
-    pub fn loop_content(&self) -> PyResult<&String> {
+    pub fn loop_content(&self) -> PyResult<String> {
         match &self.block_type {
             BlockData::Loop(loop_data) => {
-                Ok(&loop_data.content)
+                let s0 = loop_data.content.as_str()?;
+                Ok(s0.to_string())
             }
             _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                 "Not a loop data block",
@@ -140,7 +144,7 @@ impl DataBlock {
         match &self.block_type {
             BlockData::Loop(loop_data) => {
                 let lines = loop_data.content
-                    .lines()
+                    .lines()?
                     .map(|line| line.split_whitespace().collect::<Vec<&str>>().join(sep))
                     .collect::<Vec<String>>();
                 Ok(lines.join("\n"))
@@ -171,7 +175,7 @@ impl DataBlock {
                     ));
                 }
                 // trust there is only one line
-                let first_line = loop_data.content.lines().next().unwrap();
+                let first_line = loop_data.content.lines()?.next().unwrap();
                 let values = first_line.split_whitespace().collect::<Vec<&str>>();
                 // convert to scalars
                 let mut scalars = Vec::new();
@@ -191,7 +195,7 @@ impl DataBlock {
             BlockData::Simple(scalars) => {
                 let columns = scalars.iter().map(|s| s.name.clone()).collect();
                 let content = scalars.iter().map(|s| s.value.clone()).collect::<Vec<String>>().join(" ");
-                let loop_data = LoopData::new(columns, content, 1);
+                let loop_data = LoopData::new(columns, content.into_bytes(), 1);
                 Ok(DataBlock::new(self.name.clone(), BlockData::Loop(loop_data)))
             }
             _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
@@ -208,28 +212,6 @@ impl DataBlock {
         }
     }
 
-    pub fn append_values_to_loop(&mut self, values: Vec<String>) -> PyResult<()> {
-        match &mut self.block_type {
-            BlockData::Loop(loop_data) => {
-                if values.len() != loop_data.columns.len() {
-                    return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                        "Number of values does not match number of columns.",
-                    ));
-                }
-                let line = values.join(" ");
-                if !loop_data.content.is_empty() {
-                    loop_data.content.push('\n');
-                }
-                loop_data.content.push_str(&line);
-                loop_data.nrows += 1;
-                Ok(())
-            }
-            _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                "Not a loop data block",
-            )),
-        }
-    }
-
     pub fn to_html(&self, cell_style: &str, max_lines: usize) -> PyResult<String> {
         match &self.block_type {
             BlockData::Loop(loop_data) => {
@@ -239,7 +221,7 @@ impl DataBlock {
                     html.push_str(&format!("<th style=\"{}\">{}</th>", cell_style, col));
                 }
                 html.push_str("</tr>\n");
-                for (ith, line) in loop_data.content.lines().enumerate() {
+                for (ith, line) in loop_data.content.lines()?.enumerate() {
                     html.push_str("<tr>");
                     for value in line.split_whitespace() {
                         html.push_str(&format!("<td style=\"{}\">{}</td>", cell_style, value));
@@ -290,13 +272,17 @@ impl BlockData {
 
 pub struct LoopData{
     columns: Vec<String>,
-    content: String,
+    content: ByteArray,
     nrows: usize,
 }
 
 impl LoopData {
-    pub fn new(columns: Vec<String>, content: String, nrows: usize) -> Self {
-        LoopData { columns, content, nrows }
+    pub fn new(columns: Vec<String>, content: Vec<u8>, nrows: usize) -> Self {
+        LoopData { columns, content: ByteArray::new(content), nrows }
+    }
+
+    pub fn new_empty(columns: Vec<String>) -> Self {
+        LoopData { columns, content: ByteArray::new(Vec::new()), nrows: 0 }
     }
 }
 
@@ -330,4 +316,24 @@ impl Scalar {
         }
     }
 
+}
+
+struct ByteArray {
+    data: Vec<u8>,
+}
+
+impl ByteArray {
+    pub fn new(data: Vec<u8>) -> Self {
+        ByteArray { data }
+    }
+
+    pub fn as_str(&self) -> io::Result<&str> {
+        std::str::from_utf8(&self.data).map_err(|_| err_internal())
+    }
+
+    // Return an iterator over lines as &str
+    pub fn lines(&self) -> io::Result<impl Iterator<Item=&str>> {
+        let s = self.as_str()?;
+        Ok(s.lines())
+    }
 }
