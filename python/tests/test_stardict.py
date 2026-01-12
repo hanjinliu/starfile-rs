@@ -10,6 +10,14 @@ from starfile_rs.core import as_star, empty_star
 from starfile_rs.components import _is_instance
 from .constants import basic_single_quote, loop_double_quote, postprocess, rln31_style
 
+def test_get_version():
+    from starfile_rs import __version__
+
+    assert isinstance(__version__, str)
+    assert len(__version__) > 0
+    assert __version__ != "unknown"
+    assert __version__.count(".") >= 2
+
 def test_repr():
     star_content = """
     data_single
