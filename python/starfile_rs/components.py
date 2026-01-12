@@ -1,6 +1,6 @@
 from importlib import import_module
 import csv
-from io import StringIO
+from io import BytesIO, StringIO
 from abc import ABC, abstractmethod
 from typing import Any, Iterable, Iterator, TYPE_CHECKING, Literal, Mapping
 from starfile_rs import _starfile_rs_rust as _rs
@@ -529,7 +529,7 @@ class LoopDataBlock(DataBlock):
         new_block_rs = _rs.DataBlock.construct_loop_block(
             name=self.name,
             columns=self.columns,
-            content=self._rust_obj.loop_content().encode(),  # TODO: don't decode and encode again
+            content=self._rust_obj.loop_content(),
             nrows=len(self),
         )
         return LoopDataBlock(new_block_rs)
@@ -555,14 +555,15 @@ class LoopDataBlock(DataBlock):
             )
         else:
             column_str = "\n".join(f"_{col}" for col in self.columns)
-        content = self._rust_obj.loop_content()
+        content = self._rust_obj.loop_content().decode()
         if block_title:
             return f"data_{self.name}\n\nloop_\n{column_str}\n{content}"
         return f"loop_\n{column_str}\n{content}"
 
-    def _as_buf(self, new_sep: str) -> StringIO:
-        value = self._rust_obj.loop_content_with_sep(new_sep).replace("'", '"')
-        return StringIO(value)
+    def _as_buf(self, new_sep: str) -> BytesIO:
+        sep_u8 = new_sep.encode()[0]
+        value = self._rust_obj.loop_content_with_sep(sep_u8)
+        return BytesIO(value)
 
     def _to_pandas_impl(self, **kwargs) -> "pd.DataFrame":
         """Convert the data block to a pandas DataFrame."""

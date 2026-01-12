@@ -128,11 +128,10 @@ impl DataBlock {
         }
     }
 
-    pub fn loop_content(&self) -> PyResult<String> {
+    pub fn loop_content(&self) -> PyResult<&Vec<u8>> {
         match &self.block_type {
             BlockData::Loop(loop_data) => {
-                let s0 = loop_data.content.as_str()?;
-                Ok(s0.to_string())
+                Ok(loop_data.content.data())
             }
             _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                 "Not a loop data block",
@@ -140,14 +139,11 @@ impl DataBlock {
         }
     }
 
-    pub fn loop_content_with_sep(&self, sep: &str) -> PyResult<String> {
+    pub fn loop_content_with_sep(&self, sep: u8) -> PyResult<Vec<u8>> {
         match &self.block_type {
             BlockData::Loop(loop_data) => {
-                let lines = loop_data.content
-                    .lines()?
-                    .map(|line| line.split_whitespace().collect::<Vec<&str>>().join(sep))
-                    .collect::<Vec<String>>();
-                Ok(lines.join("\n"))
+                let converted = replace_multispaces(loop_data.content.data(), sep);
+                Ok(converted)
             }
             _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                 "Not a loop data block",
@@ -335,5 +331,61 @@ impl ByteArray {
     pub fn lines(&self) -> io::Result<impl Iterator<Item=&str>> {
         let s = self.as_str()?;
         Ok(s.lines())
+    }
+
+    pub fn data(&self) -> &Vec<u8> {
+        self.data.as_ref()
+    }
+}
+
+const SINGLE_QUOTE: u8 = b'\'';
+const DOUBLE_QUOTE: u8 = b'"';
+const NEW_LINE: u8 = b'\n';
+
+/// This function normalizes csv strings by:
+/// - replacing multiple consecutive whitespace characters with a single specified
+///   single byte separator.
+/// - replacing single quotes with double quotes.
+pub fn replace_multispaces(bytearray: &Vec<u8>, sep: u8) -> Vec<u8> {
+    let mut new_data = Vec::with_capacity(bytearray.len());
+    let mut in_whitespace = false;
+    let mut is_start = true;
+    for &byte in bytearray {
+        if byte == NEW_LINE {
+            // Strip trailing whitespace before newline
+            strip_end_whitespace(&mut new_data);
+            new_data.push(NEW_LINE);
+            in_whitespace = false;
+            is_start = true;
+        } else if byte.is_ascii_whitespace() {
+            if !in_whitespace && !is_start {
+                new_data.push(sep);
+                in_whitespace = true;
+                is_start = false;
+            }
+        } else {
+            // Replace single quotes with double quotes
+            if byte == SINGLE_QUOTE {
+                new_data.push(DOUBLE_QUOTE);
+            } else {
+                new_data.push(byte);
+            }
+            in_whitespace = false;
+            is_start = false;
+        }
+    }
+
+    // Strip trailing whitespace at end of data
+    strip_end_whitespace(&mut new_data);
+    new_data
+}
+
+fn strip_end_whitespace(data: &mut Vec<u8>) {
+    while let Some(&last) = data.last() {
+        if last.is_ascii_whitespace() {
+            data.pop();
+        } else {
+            break;
+        }
     }
 }
