@@ -20,7 +20,7 @@ class DataBlock:
     def construct_loop_block(
         name: str,
         columns: list[str],
-        content: list[str],
+        content: bytes,
         nrows: int,
     ) -> "DataBlock": ...
     def name(self) -> str: ...

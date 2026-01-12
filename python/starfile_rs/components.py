@@ -373,7 +373,7 @@ class LoopDataBlock(DataBlock):
         rust_block = _rs.DataBlock.construct_loop_block(
             name=name,
             columns=df.columns.tolist(),
-            content=out,
+            content=out.encode(),
             nrows=len(df),
         )
 
@@ -416,7 +416,7 @@ class LoopDataBlock(DataBlock):
         rust_block = _rs.DataBlock.construct_loop_block(
             name=name,
             columns=df.columns,
-            content=out,
+            content=out.encode(),
             nrows=len(df),
         )
         return cls(rust_block)
@@ -460,7 +460,7 @@ class LoopDataBlock(DataBlock):
         rust_block = _rs.DataBlock.construct_loop_block(
             name=name,
             columns=columns,
-            content=buf.read(),
+            content=buf.read().encode(),
             nrows=nrows,
         )
         return cls(rust_block)
@@ -488,7 +488,7 @@ class LoopDataBlock(DataBlock):
         rust_block = _rs.DataBlock.construct_loop_block(
             name=name,
             columns=columns,
-            content=buf.getvalue(),
+            content=buf.getvalue().encode(),
             nrows=nrows,
         )
         return cls(rust_block)
@@ -528,8 +528,8 @@ class LoopDataBlock(DataBlock):
         """Create a clone of the LoopDataBlock."""
         new_block_rs = _rs.DataBlock.construct_loop_block(
             name=self.name,
-            content=self._rust_obj.loop_content(),
             columns=self.columns,
+            content=self._rust_obj.loop_content().encode(),  # TODO: don't decode and encode again
             nrows=len(self),
         )
         return LoopDataBlock(new_block_rs)

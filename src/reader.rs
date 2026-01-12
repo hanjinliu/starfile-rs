@@ -82,16 +82,19 @@ impl StarTextReader {
 /// An iterator over STAR data blocks that read entire block at a time
 pub struct StarBufIter<R: io::BufRead> {
     reader: R,
+    // buf and line_remained will be used for reading lines.
     buf: Vec<u8>,
     line_remained: Vec<u8>,
 }
+
+const DEFAULT_CAPACITY: usize = 256;
 
 impl<R: io::BufRead> StarBufIter<R> {
     pub fn new(reader: R) -> Self {
         Self {
             reader,
-            buf: Vec::new(),
-            line_remained: Vec::new(),
+            buf: Vec::with_capacity(DEFAULT_CAPACITY),
+            line_remained: Vec::with_capacity(DEFAULT_CAPACITY),
         }
     }
 }
@@ -106,7 +109,8 @@ impl<R: BufRead> Iterator for StarBufIter<R> {
             let read_line_result = if self.line_remained.is_empty() {
                 self.reader.read_until(b'\n', &mut self.buf)
             } else {
-                self.buf.extend_from_slice(&self.line_remained);
+                self.buf.extend(&self.line_remained);
+                self.buf.push(b'\n');
                 self.line_remained.clear();
                 Ok(self.buf.len())
             };
@@ -122,7 +126,10 @@ impl<R: BufRead> Iterator for StarBufIter<R> {
                         continue; // Skip empty lines
                     } else if line.starts_with(b"data_") {
                         // Start of a new data block
-                        let data_block_name = String::from_utf8_lossy(&line[5..]).to_string();
+                        // SAFETY: data_ prefix is ASCII, so we can safely decode just the name part
+                        let data_block_name = unsafe {
+                            String::from_utf8_unchecked(line[5..].to_vec())
+                        };
                         let returned = parse_block(&mut self.reader, usize::MAX);
                         match returned {
                             Ok(returned) => {
@@ -158,8 +165,8 @@ fn parse_block<R: io::BufRead>(
                 if line.is_empty() {
                     continue; // Skip empty lines
                 } else if line.starts_with(b"loop_") {
-                    let (rem, columns) = parse_loop_block(&mut reader, max_num_rows)?;
-                    return Ok(ParsedBlock::new(rem, BlockData::Loop(columns)))
+                    let (rem, loopdata) = parse_loop_block(&mut reader, max_num_rows)?;
+                    return Ok(ParsedBlock::new(rem, BlockData::Loop(loopdata)))
                 } else if line.starts_with(b"_") {
                     let line_str = std::str::from_utf8(&line)
                         .map_err(|_| err_non_utf8(&String::from_utf8_lossy(&line)))?;
@@ -221,15 +228,17 @@ fn parse_simple_block<R: io::BufRead>(reader: &mut R) -> io::Result<(Vec<u8>, Ve
     Ok((line_remained, scalars))
 }
 
+/// Parse a loop data block from the reader
 fn parse_loop_block<R: io::BufRead>(
     reader: &mut R,
     max_num_rows: usize,
 ) -> io::Result<(Vec<u8>, LoopData)> {
-    let mut column_names = Vec::<String>::new();
+    let mut column_names = Vec::new();
 
     // Parse column names
-    let mut last_line = loop {
-        let mut buf = Vec::new();
+    let mut buf = Vec::new();
+    let mut input_vec = loop {
+        buf.clear();
         match reader.read_until(b'\n', &mut buf) {
             Ok(0) => {
                 return Ok((
@@ -243,28 +252,31 @@ fn parse_loop_block<R: io::BufRead>(
                     continue; // Skip empty lines
                 } else if buf_trim.starts_with(b"_") {
                     let buf_vec = remove_comment(&buf_trim);
-                    let buf_str = String::from_utf8_lossy(&buf_vec).to_string();
+                    // SAFETY: Column names should be ASCII-compatible
+                    let buf_str = unsafe { std::str::from_utf8_unchecked(&buf_vec) };
                     column_names.push(buf_str[1..].to_string());
                 } else {
                     // Reached next data section
-                    break buf_trim.to_vec();
+                    let mut rem = buf_trim.to_vec();
+                    rem.push(b'\n');
+                    break rem;
                 }
             }
             Err(e) => return Err(e),
         }
     };
 
-    if last_line.starts_with(b"data_") {
+    if input_vec.starts_with(b"data_") {
         // This happens when there is no data row in the loop block
         return Ok((
-            last_line,
+            input_vec,
             LoopData::new_empty(column_names),
         ));
     }
 
     // Parse data rows
     let mut nrows = 1;
-    let mut buf = Vec::new();
+    let mut buf = Vec::with_capacity(column_names.len() * 16);
     let line_remained = loop {
         buf.clear();
         match reader.read_until(b'\n', &mut buf) {
@@ -276,7 +288,8 @@ fn parse_loop_block<R: io::BufRead>(
                 } else if buf.starts_with(b"data_") {
                     break Vec::new(); // Start of next block
                 } else {
-                    last_line.extend_from_slice(buf_trim);
+                    input_vec.extend(buf_trim);
+                    input_vec.push(b'\n');
                     nrows += 1;
                 }
             }
@@ -286,9 +299,10 @@ fn parse_loop_block<R: io::BufRead>(
             break Vec::new(); // Reached max number of rows
         }
     };
-    Ok((line_remained, LoopData::new(column_names, last_line, nrows)))
+    Ok((line_remained, LoopData::new(column_names, input_vec, nrows)))
 }
 
+#[inline(always)]
 fn remove_comment(line: &[u8]) -> &[u8] {
     if let Some(pos) = line.iter().position(|&c| c == b'#') {
         &line[..pos].trim_ascii_end()
