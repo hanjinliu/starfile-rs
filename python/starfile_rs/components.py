@@ -148,6 +148,20 @@ class DataBlock(ABC):
 
 
 class SingleDataBlock(DataBlock, Mapping[str, Any]):
+    """A single data structure of a STAR file.
+
+    Single data blocks appear as follows in STAR files:
+    ```
+    data_example
+
+    _item1 value1
+    _item2 value2
+    ```
+
+    This object stores the byte content of the single data block and provides methods to
+    convert it to dict-like structures.
+    """
+
     def __getitem__(self, key: str) -> str:
         """Get the value of a single data item by its key."""
         for k, value_str in self._rust_obj.single_to_list():
@@ -261,12 +275,31 @@ def _parse_python_scalar(value: str) -> Any:
 
 
 class LoopDataBlock(DataBlock):
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} of name={self.name!r}, nrows={self._rust_obj.loop_nrows()}>"
+    """A loop data structure of a STAR file.
+
+    Loop data blocks appear as follows in STAR files:
+
+    ```
+    data_example
+
+    loop_
+    _column1
+    _column2
+    xxx 0.0
+    yyy 1.0
+    ```
+
+    This object stores the byte content of the loop data block and provides methods to
+    convert it to DataFrame-like structures. Note that parsing to DataFrame is more
+    costly than reading files into a data block.
+    """
 
     def __len__(self) -> int:
         """Return the number of rows in the loop data block."""
         return self._rust_obj.loop_nrows()
+
+    def __repr__(self) -> str:
+        return f"<{self.__class__.__name__} {self.name!r} with {len(self)} rows and {len(self.columns)} columns>"
 
     @property
     def shape(self) -> tuple[int, int]:
@@ -329,9 +362,8 @@ class LoopDataBlock(DataBlock):
         else:
             if len(self) == 0:
                 return np.empty((0, len(self.columns)))
-            sep = " "
-            buf = self._as_buf(sep)
-            arr = np.loadtxt(buf, delimiter=sep, ndmin=2, quotechar='"')
+            buf = self._as_buf(_SPACE)
+            arr = np.loadtxt(buf, delimiter=_SPACE, ndmin=2, quotechar='"')
         return arr
 
     @classmethod
@@ -352,7 +384,7 @@ class LoopDataBlock(DataBlock):
             for column_name in df.columns:
                 if (col := df[column_name]).dtype.kind not in "biuf":
                     col = col.astype(str)
-                    cond = col.str.contains(" ") | (col == "")
+                    cond = col.str.contains(_SPACE) | (col == "")
                     new_col = col.where(~cond, '"' + col + '"')
                     new_columns.append(new_col)
             if new_columns:
@@ -399,7 +431,7 @@ class LoopDataBlock(DataBlock):
                     continue
                 _col = pl.col(column_name)
                 cond = (
-                    pl.when(_col.str.contains(" ") | _col.eq(""))
+                    pl.when(_col.str.contains(_SPACE) | _col.eq(""))
                     .then('"' + _col + '"')
                     .otherwise(_col)
                 )
@@ -571,10 +603,9 @@ class LoopDataBlock(DataBlock):
 
         # NOTE: converting multiple whitespaces to a single space for pandas read_csv
         # performs better
-        sep = " "
         return pd.read_csv(
-            self._as_buf(sep),
-            delimiter=sep,
+            self._as_buf(_SPACE),
+            delimiter=_SPACE,
             header=None,
             comment="#",
             keep_default_na=False,
@@ -588,15 +619,14 @@ class LoopDataBlock(DataBlock):
         import polars as pl
 
         # polars does not support reading empty data.
-        if self._rust_obj.loop_nrows() == 0:
+        if len(self) == 0:
             return pl.DataFrame(
                 {col: pl.Series([], dtype=pl.Unknown) for col in self.columns}
             )
 
-        sep = " "
         return pl.read_csv(
-            self._as_buf(sep),
-            separator=sep,
+            self._as_buf(_SPACE),
+            separator=_SPACE,
             has_header=False,
             comment_prefix="#",
             null_values=_NAN_STRINGS,
@@ -605,6 +635,7 @@ class LoopDataBlock(DataBlock):
 
 
 _NAN_STRINGS = ["nan", "NaN", "<NA>"]
+_SPACE = " "
 
 
 def _python_obj_to_str(value: Any) -> str:
@@ -612,7 +643,7 @@ def _python_obj_to_str(value: Any) -> str:
     if isinstance(value, str):
         if value == "":
             return '""'
-        elif " " in value:
+        elif _SPACE in value:
             if value[0] == value[-1] == '"':
                 return value
             return f'"{value}"'

@@ -17,3 +17,8 @@ __all__ = [
     "SingleDataBlock",
     "LoopDataBlock",
 ]
+
+try:
+    from starfile_rs._starfile_rs_rust import __version__
+except Exception:
+    __version__ = "unknown"

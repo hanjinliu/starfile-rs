@@ -10,5 +10,8 @@ fn _starfile_rs_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<reader::StarTextReader>()?;
     m.add_class::<blocks::DataBlock>()?;
     m.add_class::<blocks::BlockType>()?;
+
+    m.add("__version__", env!("CARGO_PKG_VERSION"))?;
+
     Ok(())
 }
