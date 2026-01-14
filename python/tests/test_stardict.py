@@ -476,3 +476,7 @@ def test_slice_large_block():
     assert sliced_loop.shape == (5, 1)
     df = sliced_loop.to_pandas()
     assert df["index"].tolist() == [10000, 10001, 10002, 10003, 10004]
+    with pytest.raises(IndexError):
+        large_loop.slice(num_rows + 1, 1)
+    assert sliced_loop.slice(1, 3).shape == (3, 1)
+    assert sliced_loop.slice(1, 3).slice(0, 2).shape == (2, 1)
