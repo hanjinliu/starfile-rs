@@ -490,3 +490,45 @@ def test_write_with_empty_fields(tmpdir):
     m2 = MyModel.validate_file(save_path)
     assert m2.loop.dataframe.shape == (3, 1)
     assert "rlnCoordinateY" not in m2.loop.dataframe.columns
+
+def test_update_and_write(tmpdir):
+    """Testing updating fields and writing back to file will update the content"""
+    from starfile_rs.schema.pandas import LoopDataModel, Series
+
+    class OneLoop(LoopDataModel):
+        x: Series[float] = Field("rlnCoordinateX")
+        y: Series[float] = Field("rlnCoordinateY", default=None)
+
+    class MyModel(StarModel):
+        general: General = Field("general")
+        loop: OneLoop = Field()
+
+    m = MyModel(
+        general=General(
+            final_res=15.0,
+            rlnMaskName="mask2.mrc",
+            randomise_from="2.0",
+        ),
+        loop=OneLoop(
+            x=[1.0, 2.0, 3.0],
+        ),
+    )
+
+    save_path = tmpdir / "output.star"
+    m.write(save_path)
+    m1 = MyModel.validate_file(save_path)
+    assert m1.general.final_res == pytest.approx(15.0)
+    assert m1.general.rlnMaskName == "mask2.mrc"
+    assert m1.general.randomise_from == "2.0"
+
+    m.general.final_res = 20.0
+    m.write(save_path)
+    m2 = MyModel.validate_file(save_path)
+    assert m2.general.final_res == pytest.approx(20.0)
+    assert m2.general.rlnMaskName == "mask2.mrc"
+
+    m.general.rlnMaskName = "mask8.mrc"
+    m.write(save_path)
+    m3 = MyModel.validate_file(save_path)
+    assert m3.general.final_res == pytest.approx(20.0)
+    assert m3.general.rlnMaskName == "mask8.mrc"
