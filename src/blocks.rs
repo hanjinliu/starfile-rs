@@ -3,6 +3,10 @@ use std::io;
 use pyo3::prelude::*;
 use crate::err::{err_internal};
 
+const SINGLE_QUOTE: u8 = b'\'';
+const DOUBLE_QUOTE: u8 = b'"';
+const NEW_LINE: u8 = b'\n';
+
 #[pyclass]
 pub struct DataBlock {
     pub name: String,
@@ -44,9 +48,38 @@ impl DataBlock {
         name: String,
         columns: Vec<String>,
         content: Vec<u8>,
-        nrows: usize,
+        offsets: Vec<usize>,
     ) -> Self {
-        let loop_data = LoopData::new(columns, content, nrows);
+        let loop_data = LoopData::new(columns, content, offsets);
+        DataBlock::new(name.clone(), BlockData::Loop(loop_data))
+    }
+
+    #[staticmethod]
+    pub fn construct_loop_block_from_bytes(
+        name: String,
+        columns: Vec<String>,
+        content: Vec<u8>,  // contains new line characters
+        num_rows: usize,
+    ) -> Self {
+        let mut offsets = Vec::with_capacity(num_rows + 1);
+        offsets.push(0);
+        let mut current_offset: usize = 0;
+
+        // Strip trailing newline if present
+        let content_slice = if !content.is_empty() && content[content.len() - 1] == NEW_LINE {
+            &content[..content.len() - 1]
+        } else {
+            &content[..]
+        };
+
+        for line in content_slice.split(|&b| b == NEW_LINE) {
+            current_offset += line.len() + 1; // +1 for newline
+            offsets.push(current_offset);
+        }
+        if offsets.len() != num_rows + 1 {
+            panic!("{} rows expected but got {}", num_rows, offsets.len() - 1);
+        }  // this should never happen
+        let loop_data = LoopData::new(columns, content, offsets);
         DataBlock::new(name.clone(), BlockData::Loop(loop_data))
     }
 
@@ -128,10 +161,10 @@ impl DataBlock {
         }
     }
 
-    pub fn loop_content(&self) -> PyResult<&Vec<u8>> {
+    pub fn loop_offsets(&self) -> PyResult<Vec<usize>> {
         match &self.block_type {
             BlockData::Loop(loop_data) => {
-                Ok(loop_data.content.data())
+                Ok(loop_data.content.offsets.clone())
             }
             _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                 "Not a loop data block",
@@ -139,11 +172,38 @@ impl DataBlock {
         }
     }
 
-    pub fn loop_content_with_sep(&self, sep: u8) -> PyResult<Vec<u8>> {
+    /// Get the raw byte content of the loop data block
+    /// This is mainly for cloning blocks and text viewing purposes; for data
+    /// processing, use `loop_content_with_sep`.
+    pub fn loop_content(
+        &self,
+        start: usize,
+        end: usize,
+    ) -> PyResult<&[u8]> {
         match &self.block_type {
             BlockData::Loop(loop_data) => {
-                let converted = replace_multispaces(loop_data.content.data(), sep);
-                Ok(converted)
+                let slice = loop_data.content.data_sliced(start, end)?;
+                Ok(slice)
+            }
+            _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "Not a loop data block",
+            )),
+        }
+    }
+
+    /// Standardize loop content by replacing multiple spaces with a single specified
+    /// separator, from start to end row positions.
+    pub fn loop_content_with_sep(
+        &self,
+        sep: u8,
+        start: usize,
+        end: usize,
+    ) -> PyResult<Vec<u8>> {
+        match &self.block_type {
+            BlockData::Loop(loop_data) => {
+                let slice = loop_data.content.data_sliced(start, end)?;
+                let replaced = replace_multispaces(slice, sep);
+                Ok(replaced)
             }
             _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                 "Not a loop data block",
@@ -154,7 +214,7 @@ impl DataBlock {
     pub fn loop_nrows(&self) -> PyResult<usize> {
         match &self.block_type {
             BlockData::Loop(loop_data) => {
-                Ok(loop_data.nrows)
+                Ok(loop_data.num_rows())
             }
             _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                 "Not a loop data block",
@@ -165,7 +225,7 @@ impl DataBlock {
     pub fn as_single(&self) -> PyResult<DataBlock> {
         match &self.block_type {
             BlockData::Loop(loop_data) => {
-                if loop_data.nrows != 1 {
+                if loop_data.num_rows() != 1 {
                     return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                         "Cannot convert loop data block with multiple rows to single data block.",
                     ));
@@ -189,9 +249,16 @@ impl DataBlock {
     pub fn as_loop(&self) -> PyResult<DataBlock> {
         match &self.block_type {
             BlockData::Simple(scalars) => {
-                let columns = scalars.iter().map(|s| s.name.clone()).collect();
-                let content = scalars.iter().map(|s| s.value.clone()).collect::<Vec<String>>().join(" ");
-                let loop_data = LoopData::new(columns, content.into_bytes(), 1);
+                let columns = scalars
+                    .iter()
+                    .map(|s| s.name.clone())
+                    .collect();
+                let content = scalars
+                    .iter()
+                    .map(|s| s.value.clone())
+                    .collect::<Vec<String>>().join(" ");
+                let offsets = vec![0, content.len()];
+                let loop_data = LoopData::new(columns, content.into_bytes(), offsets);
                 Ok(DataBlock::new(self.name.clone(), BlockData::Loop(loop_data)))
             }
             _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
@@ -269,16 +336,29 @@ impl BlockData {
 pub struct LoopData{
     columns: Vec<String>,
     content: ByteArray,
-    nrows: usize,
 }
 
 impl LoopData {
-    pub fn new(columns: Vec<String>, content: Vec<u8>, nrows: usize) -> Self {
-        LoopData { columns, content: ByteArray::new(content), nrows }
+    pub fn new(
+        columns: Vec<String>,
+        content: Vec<u8>,
+        offsets: Vec<usize>,
+    ) -> Self {
+        LoopData {
+            columns,
+            content: ByteArray::new(content, offsets),
+        }
     }
 
     pub fn new_empty(columns: Vec<String>) -> Self {
-        LoopData { columns, content: ByteArray::new(Vec::new()), nrows: 0 }
+        LoopData {
+            columns,
+            content: ByteArray::new(Vec::new(), vec![0]),
+        }
+    }
+
+    pub fn num_rows(&self) -> usize {
+        self.content.offsets.len() - 1
     }
 }
 
@@ -315,38 +395,42 @@ impl Scalar {
 }
 
 struct ByteArray {
-    data: Vec<u8>,
+    data: Vec<u8>,  // lines of bytes, as flat vector, should contain \n
+    offsets: Vec<usize>, // starting offsets of each line, contains 0 and len(data)
 }
 
 impl ByteArray {
-    pub fn new(data: Vec<u8>) -> Self {
-        ByteArray { data }
-    }
-
-    pub fn as_str(&self) -> io::Result<&str> {
-        std::str::from_utf8(&self.data).map_err(|_| err_internal())
+    pub fn new(data: Vec<u8>, offsets: Vec<usize>) -> Self {
+        ByteArray { data, offsets }
     }
 
     // Return an iterator over lines as &str
     pub fn lines(&self) -> io::Result<impl Iterator<Item=&str>> {
-        let s = self.as_str()?;
-        Ok(s.lines())
+        let num_lines = self.offsets.len() - 1;
+        let lines_iter = (0..num_lines).map(move |i| {
+            let start_offset = self.offsets[i];
+            let end_offset = self.offsets[i + 1];
+            let line_bytes = &self.data[start_offset..end_offset];
+            std::str::from_utf8(line_bytes).map_err(|_| err_internal())
+        });
+        Ok(lines_iter.collect::<Result<Vec<&str>, io::Error>>()?.into_iter())
     }
 
-    pub fn data(&self) -> &Vec<u8> {
-        self.data.as_ref()
+    pub fn data_sliced(&self, start: usize, end: usize) -> io::Result<&[u8]> {
+        if start > end || end >= self.offsets.len() {
+            return Err(err_internal());
+        }
+        let start_offset = self.offsets[start];
+        let end_offset = self.offsets[end];
+        Ok(&self.data[start_offset..end_offset])
     }
 }
-
-const SINGLE_QUOTE: u8 = b'\'';
-const DOUBLE_QUOTE: u8 = b'"';
-const NEW_LINE: u8 = b'\n';
 
 /// This function normalizes csv strings by:
 /// - replacing multiple consecutive whitespace characters with a single specified
 ///   single byte separator.
 /// - replacing single quotes with double quotes.
-pub fn replace_multispaces(bytearray: &Vec<u8>, sep: u8) -> Vec<u8> {
+pub fn replace_multispaces(bytearray: &[u8], sep: u8) -> Vec<u8> {
     let mut new_data = Vec::with_capacity(bytearray.len());
     let mut in_whitespace = false;
     let mut is_start = true;

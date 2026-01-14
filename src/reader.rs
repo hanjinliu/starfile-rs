@@ -110,7 +110,6 @@ impl<R: BufRead> Iterator for StarBufIter<R> {
                 self.reader.read_until(b'\n', &mut self.buf)
             } else {
                 self.buf.extend(&self.line_remained);
-                self.buf.push(b'\n');
                 self.line_remained.clear();
                 Ok(self.buf.len())
             };
@@ -237,7 +236,7 @@ fn parse_loop_block<R: io::BufRead>(
 
     // Parse column names
     let mut buf = Vec::new();
-    let mut input_vec = loop {
+    let mut last_line = loop {
         buf.clear();
         match reader.read_until(b'\n', &mut buf) {
             Ok(0) => {
@@ -266,17 +265,18 @@ fn parse_loop_block<R: io::BufRead>(
         }
     };
 
-    if input_vec.starts_with(b"data_") {
+    if last_line.starts_with(b"data_") {
         // This happens when there is no data row in the loop block
         return Ok((
-            input_vec,
+            last_line,
             LoopData::new_empty(column_names),
         ));
     }
 
     // Parse data rows
     let mut nrows = 1;
-    let mut buf = Vec::with_capacity(column_names.len() * 16);
+    let mut buf = Vec::with_capacity(last_line.len());
+    let mut offsets = vec![0, last_line.len()];
     let line_remained = loop {
         buf.clear();
         match reader.read_until(b'\n', &mut buf) {
@@ -288,8 +288,9 @@ fn parse_loop_block<R: io::BufRead>(
                 } else if buf.starts_with(b"data_") {
                     break Vec::new(); // Start of next block
                 } else {
-                    input_vec.extend(buf_trim);
-                    input_vec.push(b'\n');
+                    last_line.extend(buf_trim);
+                    last_line.push(b'\n');
+                    offsets.push(last_line.len());
                     nrows += 1;
                 }
             }
@@ -299,7 +300,7 @@ fn parse_loop_block<R: io::BufRead>(
             break Vec::new(); // Reached max number of rows
         }
     };
-    Ok((line_remained, LoopData::new(column_names, input_vec, nrows)))
+    Ok((line_remained, LoopData::new(column_names, last_line, offsets)))
 }
 
 #[inline(always)]

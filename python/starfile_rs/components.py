@@ -294,9 +294,20 @@ class LoopDataBlock(DataBlock):
     costly than reading files into a data block.
     """
 
+    def __init__(
+        self,
+        obj: _rs.DataBlock,
+        /,
+        start: int = 0,
+        end: int | None = None,
+    ) -> None:
+        super().__init__(obj)
+        self._row_start = start
+        self._row_end = obj.loop_nrows() if end is None else end
+
     def __len__(self) -> int:
         """Return the number of rows in the loop data block."""
-        return self._rust_obj.loop_nrows()
+        return self._row_end - self._row_start
 
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__} {self.name!r} with {len(self)} rows and {len(self.columns)} columns>"
@@ -305,6 +316,27 @@ class LoopDataBlock(DataBlock):
     def shape(self) -> tuple[int, int]:
         """Return the shape of the loop data block as (nrows, ncolumns)."""
         return (len(self), len(self.columns))
+
+    def slice(self, offset: int, length: int) -> "LoopDataBlock":
+        """Return a sliced view of the loop data block.
+
+        This is a cheap operation that does not involve data copying. If you want to use
+        a small part of a large loop data block, consider using this method before
+        calling `to_pandas()`, `to_polars()`, or other conversion methods.
+
+        Parameters
+        ----------
+        offset : int
+            The starting row index of the slice.
+        length : int
+            The number of rows in the slice.
+        """
+        start = self._row_start + offset
+        end = min(start + length, self._row_end)
+        if start < 0 or end > self._row_end or start >= end:
+            raise IndexError("Slice indices are out of range.")
+        new_block = LoopDataBlock(self._rust_obj, start=start, end=end)
+        return new_block
 
     def to_pandas(
         self,
@@ -402,11 +434,11 @@ class LoopDataBlock(DataBlock):
             lineterminator="\n",
         )
 
-        rust_block = _rs.DataBlock.construct_loop_block(
+        rust_block = _rs.DataBlock.construct_loop_block_from_bytes(
             name=name,
             columns=df.columns.tolist(),
             content=out.encode(),
-            nrows=len(df),
+            num_rows=len(df),
         )
 
         return cls(rust_block)
@@ -445,11 +477,11 @@ class LoopDataBlock(DataBlock):
             float_precision=float_precision,
             quote_style="never",
         )
-        rust_block = _rs.DataBlock.construct_loop_block(
+        rust_block = _rs.DataBlock.construct_loop_block_from_bytes(
             name=name,
             columns=df.columns,
             content=out.encode(),
-            nrows=len(df),
+            num_rows=len(df),
         )
         return cls(rust_block)
 
@@ -489,11 +521,11 @@ class LoopDataBlock(DataBlock):
             delimiter=separator,
         )
         buf.seek(0)
-        rust_block = _rs.DataBlock.construct_loop_block(
+        rust_block = _rs.DataBlock.construct_loop_block_from_bytes(
             name=name,
             columns=columns,
             content=buf.read().encode(),
-            nrows=nrows,
+            num_rows=nrows,
         )
         return cls(rust_block)
 
@@ -517,11 +549,11 @@ class LoopDataBlock(DataBlock):
         for row in it:
             w.writerow([_python_obj_to_str(val) for val in row])
             nrows += 1
-        rust_block = _rs.DataBlock.construct_loop_block(
+        rust_block = _rs.DataBlock.construct_loop_block_from_bytes(
             name=name,
             columns=columns,
             content=buf.getvalue().encode(),
-            nrows=nrows,
+            num_rows=nrows,
         )
         return cls(rust_block)
 
@@ -561,8 +593,8 @@ class LoopDataBlock(DataBlock):
         new_block_rs = _rs.DataBlock.construct_loop_block(
             name=self.name,
             columns=self.columns,
-            content=self._rust_obj.loop_content(),
-            nrows=len(self),
+            content=self._rust_obj.loop_content(self._row_start, self._row_end),
+            offsets=self._rust_obj.loop_offsets(),
         )
         return LoopDataBlock(new_block_rs)
 
@@ -587,14 +619,21 @@ class LoopDataBlock(DataBlock):
             )
         else:
             column_str = "\n".join(f"_{col}" for col in self.columns)
-        content = self._rust_obj.loop_content().decode()
+        content = self._rust_obj.loop_content(self._row_start, self._row_end).decode()
         if block_title:
             return f"data_{self.name}\n\nloop_\n{column_str}\n{content}"
         return f"loop_\n{column_str}\n{content}"
 
-    def _as_buf(self, new_sep: str) -> BytesIO:
+    def _as_buf(
+        self,
+        new_sep: str,
+    ) -> BytesIO:
         sep_u8 = new_sep.encode()[0]
-        value = self._rust_obj.loop_content_with_sep(sep_u8)
+        value = self._rust_obj.loop_content_with_sep(
+            sep_u8,
+            self._row_start,
+            self._row_end,
+        )
         return BytesIO(value)
 
     def _to_pandas_impl(self, **kwargs) -> "pd.DataFrame":
