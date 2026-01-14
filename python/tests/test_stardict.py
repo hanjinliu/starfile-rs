@@ -463,3 +463,16 @@ def test_very_long_html():
     for i in range(200):
         star.with_single_block(name=f"block_{i}", data={"key": i})
     _repr.html_block(star, max_blocks=100)  # Should not raise
+
+def test_slice_large_block():
+    star = empty_star()
+    num_rows = 100_000
+    star.with_loop_block(
+        name="large_loop",
+        data=pd.DataFrame({"index": np.arange(num_rows)})
+    )
+    large_loop = star["large_loop"].trust_loop()
+    sliced_loop = large_loop.slice(10_000, 5)
+    assert sliced_loop.shape == (5, 1)
+    df = sliced_loop.to_pandas()
+    assert df["index"].tolist() == [10000, 10001, 10002, 10003, 10004]
