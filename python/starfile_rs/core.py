@@ -12,7 +12,7 @@ from typing import (
 )
 from starfile_rs.io import StarReader
 from starfile_rs.components import DataBlock, SingleDataBlock, LoopDataBlock
-from starfile_rs import _repr
+from starfile_rs import _repr, _utils
 
 if TYPE_CHECKING:
     import os
@@ -102,7 +102,7 @@ def as_star(obj=None, /, **kwargs) -> "StarDict":
         return obj
     out = empty_star()
     if isinstance(obj, Mapping):
-        if any(_is_scalar(v) for v in obj.values()):
+        if any(_utils.is_scalar(v) for v in obj.values()):
             out.with_single_block("", obj)
         else:
             for key, value in obj.items():
@@ -305,15 +305,6 @@ class StarDict(MutableMapping[str, "DataBlock"]):
         if comment:
             strings.insert(0, f"# {comment}\n")
         return "".join(strings)
-
-
-def _is_scalar(obj: Any) -> bool:
-    return (
-        isinstance(obj, (str, int, float, bool))
-        or obj is None
-        or hasattr(obj, "__index__")
-        or hasattr(obj, "__float__")
-    )
 
 
 def _set_single_or_loop(star: "StarDict", key: str, value: Any) -> None:
