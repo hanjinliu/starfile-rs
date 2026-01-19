@@ -257,7 +257,7 @@ class SingleDataBlock(DataBlock, Mapping[str, Any]):
             If True, include the 'data_XX' title at the beginning.
         """
         out = "\n".join(
-            f"_{n} {_utils.python_obj_to_str(v)}"
+            f"_{n}\t{_utils.python_obj_to_str(v)}"
             for n, v in self._rust_obj.single_to_list()
         )
         if block_title:

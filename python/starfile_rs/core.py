@@ -290,8 +290,8 @@ class StarDict(MutableMapping[str, "DataBlock"]):
     def write(self, file: str | Path | TextIOBase) -> None:
         """Serialize the STAR file contents to a string."""
         if isinstance(file, (str, Path)):
-            with open(file, "w") as f:
-                f.write(self.to_string())
+            path = Path(file)
+            path.write_text(self.to_string())
         else:
             file.write(self.to_string())
 

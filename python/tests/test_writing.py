@@ -144,9 +144,9 @@ def test_empty_string_simple():
     s0 = star.to_string(comment=None)
     assert s0.strip() == (
         'data_simple\n\n'
-        '_a ""\n'
-        '_b non-empty\n'
-        '_c ""'
+        '_a\t""\n'
+        '_b\tnon-empty\n'
+        '_c\t""'
     )
 
 def test_empty_string_loop():
@@ -184,9 +184,9 @@ def test_string_with_space_simple():
     s0 = star.to_string(comment=None)
     assert s0.strip() == (
         'data_simple\n\n'
-        '_a "string with space"\n'
-        '_b nospace\n'
-        '_c "OK "'
+        '_a\t"string with space"\n'
+        '_b\tnospace\n'
+        '_c\t"OK "'
     )
 
 def test_string_with_space_loop():
