@@ -4,6 +4,7 @@ from io import BytesIO, StringIO
 from abc import ABC, abstractmethod
 from typing import Any, Iterable, Iterator, TYPE_CHECKING, Literal, Mapping
 from starfile_rs import _starfile_rs_rust as _rs
+from starfile_rs import _utils
 
 if TYPE_CHECKING:
     import numpy as np
@@ -256,7 +257,8 @@ class SingleDataBlock(DataBlock, Mapping[str, Any]):
             If True, include the 'data_XX' title at the beginning.
         """
         out = "\n".join(
-            f"_{n}\t{_python_obj_to_str(v)}" for n, v in self._rust_obj.single_to_list()
+            f"_{n}\t{_utils.python_obj_to_str(v)}"
+            for n, v in self._rust_obj.single_to_list()
         )
         if block_title:
             return f"data_{self.name}\n\n{out}"
@@ -540,6 +542,20 @@ class LoopDataBlock(DataBlock):
         buf = StringIO()
         if isinstance(data, Mapping):
             columns = list(data.keys())
+            if all(_utils.is_scalar(v) for v in data.values()):
+                data = {k: [v] for k, v in data.items()}
+            else:
+                lengths = set()
+                for val in data.values():
+                    if not _utils.is_sequence(val):
+                        raise ValueError(
+                            "All values in the mapping must be sequences of equal length."
+                        )
+                    lengths.add(len(val))
+                if len(lengths) > 1:
+                    raise ValueError(
+                        "All values in the mapping must be sequences of equal length."
+                    )
             it = zip(*data.values())
         else:
             columns = [f"column_{i}" for i in range(len(data[0]))]
@@ -547,7 +563,7 @@ class LoopDataBlock(DataBlock):
         nrows = 0
         w = csv.writer(buf, delimiter=separator)
         for row in it:
-            w.writerow([_python_obj_to_str(val) for val in row])
+            w.writerow([_utils.python_obj_to_str(val) for val in row])
             nrows += 1
         rust_block = _rs.DataBlock.construct_loop_block_from_bytes(
             name=name,
@@ -566,6 +582,7 @@ class LoopDataBlock(DataBlock):
         float_precision: int = 6,
         quote_unsafe: bool = False,
     ) -> "LoopDataBlock":
+        """An intelligent constructor from various data types."""
         if _is_pandas_dataframe(data):
             block = LoopDataBlock.from_pandas(
                 name,
@@ -675,18 +692,6 @@ class LoopDataBlock(DataBlock):
 
 _NAN_STRINGS = ["nan", "NaN", "<NA>"]
 _SPACE = " "
-
-
-def _python_obj_to_str(value: Any) -> str:
-    """Convert a Python scalar to a string representation for STAR files."""
-    if isinstance(value, str):
-        if value == "":
-            return '""'
-        elif _SPACE in value:
-            if value[0] == value[-1] == '"':
-                return value
-            return f'"{value}"'
-    return str(value)
 
 
 def _is_pandas_dataframe(obj: Any) -> "TypeGuard[pd.DataFrame]":

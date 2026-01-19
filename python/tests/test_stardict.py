@@ -219,8 +219,22 @@ def test_loop_block_construction():
     del star_new["loop_5"]
     assert "loop_5" not in star_new
 
+    # scalar as array
+    star.with_loop_block("loop_6", {"x": 1})
+    assert star["loop_6"].trust_loop().to_pandas().equals(pd.DataFrame({"x": [1]}))
+
+    star.with_loop_block("loop_6", {"x": "p", "y": "qq"})
+    assert star["loop_6"].trust_loop().to_pandas().equals(pd.DataFrame({"x": ["p"], "y": ["qq"]}))
+
     with pytest.raises(TypeError):
         star_new.with_block(0)
+
+def test_loop_block_construction_errors():
+    star = empty_star()
+    with pytest.raises(ValueError):  # mismatched lengths
+        star.with_loop_block("a", {"x": [1], "y": [1, 2]})
+    with pytest.raises(ValueError):  # mismatched lengths
+        star.with_loop_block("a", {"x": 1, "y": [1, 2]})
 
 def test_rename():
     data = """
