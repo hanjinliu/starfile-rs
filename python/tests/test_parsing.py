@@ -27,6 +27,12 @@ from .constants import (
 )
 from .utils import generate_large_star_file
 
+if pd.__version__.split(".")[0] == "2":
+    str_dtype = "object"
+elif pd.__version__.split(".")[0] == "3":
+    str_dtype = "string"
+else:
+    raise ValueError(f"Unsupported pandas version: {pd.__version__}")
 
 def test_instantiation():
     """Tests instantiation of the StarFile class"""
@@ -255,10 +261,10 @@ def test_quote_loop_pandas(filename):
     assert star[''].to_pandas().loc[0, 'whitespace_string'] == " "
     assert star[''].to_pandas().loc[0, 'empty_string'] == ""
     assert star[''].to_pandas().loc[0, 'empty_string'] == ""
-    assert star[''].to_pandas().dtypes['number_and_string'] == "object"
+    assert star[''].to_pandas().dtypes['number_and_string'] == str_dtype
     # assert star[''].to_pandas().dtypes['number_and_empty'] == 'float64'
     assert star[''].to_pandas().dtypes['number'] == 'float64'
-    assert star[''].to_pandas().dtypes['empty_string_and_normal_string'] == "object"
+    assert star[''].to_pandas().dtypes['empty_string_and_normal_string'] == str_dtype
 
     # assert math.isnan(star[''].to_pandas().loc[1, 'number_and_empty'])
     assert star[''].to_pandas().loc[0, 'empty_string_and_normal_string'] == ""
@@ -292,7 +298,7 @@ def test_parse_as_string():
 
     # check 'rlnResolution' is parsed as string in fsc (loop) block
     df_pd = star['fsc'].to_pandas(string_columns=string_columns)
-    assert df_pd['rlnResolution'].dtype == object
+    assert df_pd['rlnResolution'].dtype == str_dtype
 
     # check 'rlnResolution' is parsed as string in fsc (loop) block
     df_pl = star['fsc'].to_polars(string_columns=string_columns)

@@ -1,5 +1,6 @@
 /target
 benchmarks/
+_benchmarks/
 marimo.py
 jupyter.ipynb
 .ipynb_checkpoints/
