@@ -4,6 +4,7 @@ _benchmarks/
 marimo.py
 jupyter.ipynb
 .ipynb_checkpoints/
+_starfile_rs_rust.pdb
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
