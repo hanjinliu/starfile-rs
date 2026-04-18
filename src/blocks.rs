@@ -72,9 +72,11 @@ impl DataBlock {
             &content[..]
         };
 
-        for line in content_slice.split(|&b| b == NEW_LINE) {
-            current_offset += line.len() + 1; // +1 for newline
-            offsets.push(current_offset);
+        if !content.is_empty() {
+            for line in content_slice.split(|&b| b == NEW_LINE) {
+                current_offset += line.len() + 1; // +1 for newline
+                offsets.push(current_offset);
+            }
         }
         if offsets.len() != num_rows + 1 {
             panic!("{} rows expected but got {}", num_rows, offsets.len() - 1);

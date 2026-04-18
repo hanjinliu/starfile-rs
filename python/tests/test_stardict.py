@@ -494,3 +494,14 @@ def test_slice_large_block():
         large_loop.slice(num_rows + 1, 1)
     assert sliced_loop.slice(1, 3).shape == (3, 1)
     assert sliced_loop.slice(1, 3).slice(0, 2).shape == (2, 1)
+
+def test_construct_empty_loop_block():
+    block = LoopDataBlock.from_pandas("empty", pd.DataFrame(columns=["col1", "col2"]))
+    assert block.name == "empty"
+    assert block.columns == ["col1", "col2"]
+    assert block.shape == (0, 2)
+
+    block = LoopDataBlock.from_pandas("empty", pd.DataFrame(columns=[]))
+    assert block.name == "empty"
+    assert block.columns == []
+    assert block.shape == (0, 0)
