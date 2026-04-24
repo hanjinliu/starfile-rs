@@ -74,8 +74,9 @@ class LoopDataModel(LoopDataModelBase[pd.DataFrame]):
     def _parse_object(cls, name: str, value: Any) -> LoopDataBlock:
         if isinstance(value, pd.DataFrame):
             df = value
-        elif hasattr(value, "__dataframe__"):
-            df = pd.api.interchange.from_dataframe(value.__dataframe__())
+        elif hasattr(value, "to_pandas"):
+            # polars etc.
+            df = value.to_pandas()
         else:
             df = pd.DataFrame(value)
         return LoopDataBlock.from_pandas(name, df)
