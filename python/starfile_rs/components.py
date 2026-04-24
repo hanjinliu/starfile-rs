@@ -438,7 +438,7 @@ class LoopDataBlock(DataBlock):
 
         rust_block = _rs.DataBlock.construct_loop_block_from_bytes(
             name=name,
-            columns=df.columns.tolist(),
+            columns=df.columns.astype(str, copy=False).tolist(),
             content=out.encode(),
             num_rows=len(df),
         )

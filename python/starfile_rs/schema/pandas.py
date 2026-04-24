@@ -11,7 +11,7 @@ from typing import (
 )
 import pandas as pd
 
-from starfile_rs.components import LoopDataBlock
+from starfile_rs.components import LoopDataBlock, _is_polars_dataframe
 from starfile_rs.schema._fields import LoopField, Field
 from starfile_rs.schema._models import (
     SingleDataModel,
@@ -74,8 +74,10 @@ class LoopDataModel(LoopDataModelBase[pd.DataFrame]):
     def _parse_object(cls, name: str, value: Any) -> LoopDataBlock:
         if isinstance(value, pd.DataFrame):
             df = value
-        elif hasattr(value, "__dataframe__"):
-            df = pd.api.interchange.from_dataframe(value.__dataframe__())
+        elif _is_polars_dataframe(value):
+            # df = value.to_pandas() requires pyarrow. Although it is faster, just use
+            # to_dict() for now to avoid mismatching outcomes.
+            df = pd.DataFrame(value.to_dict())
         else:
             df = pd.DataFrame(value)
         return LoopDataBlock.from_pandas(name, df)
