@@ -206,7 +206,7 @@ fn parse_simple_block<R: io::BufRead>(reader: &mut R) -> io::Result<(Vec<u8>, Ve
             Ok(_) => {
                 let buf_trim = buf.trim_ascii_end();
                 if buf_trim.is_empty() {
-                    break Vec::new(); // End of block
+                    continue;  // Skip empty lines
                 } else if buf_trim.starts_with(b"_") {
                     let line = remove_comment(buf_trim.into());
                     let line_decoded = String::from_utf8_lossy(&line).to_string();

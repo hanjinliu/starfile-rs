@@ -350,3 +350,26 @@ def test_parse_empty_loop():
     # NOTE: structured arrays are 1D in this case
     assert star["A"].trust_loop().to_numpy(structure_by="pandas").shape == (0,)
     assert star["A"].trust_loop().to_numpy(structure_by="polars").shape == (0,)
+
+def test_simple_block_with_newlines():
+    star_text = [
+        "data_A",
+        "",
+        "_a 1",
+        ""
+        "_b 2",
+        "",
+        "_c text"
+        "",
+        "data_B",
+        "loop_",
+        "_t #1",
+        "1",
+        "2",
+        "3",
+    ]
+    star_text = "\n".join(star_text)
+
+    star = read_star_text(star_text)
+    assert list(star.keys()) == ['A', 'B']
+    assert star["A"].trust_single().to_dict() == {'a': 1, 'b': 2, 'c': 'text'}
