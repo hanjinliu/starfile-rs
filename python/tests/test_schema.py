@@ -491,9 +491,20 @@ def test_write_with_empty_fields(tmpdir):
     assert m2.loop.dataframe.shape == (3, 1)
     assert "rlnCoordinateY" not in m2.loop.dataframe.columns
 
-def test_update_and_write(tmpdir):
+@pytest.mark.parametrize(
+    "loopDataModel, series",
+    [
+        (spd.LoopDataModel, spd.Series),
+        (spl.LoopDataModel, spl.Series),
+    ]
+)
+def test_update_and_write(tmpdir, loopDataModel, series):
     """Testing updating fields and writing back to file will update the content"""
-    from starfile_rs.schema.pandas import LoopDataModel, Series
+    if TYPE_CHECKING:
+        from starfile_rs.schema.pandas import LoopDataModel, Series
+    else:
+        LoopDataModel = loopDataModel
+        Series = series
 
     class OneLoop(LoopDataModel):
         x: Series[float] = Field("rlnCoordinateX")
@@ -532,3 +543,5 @@ def test_update_and_write(tmpdir):
     m3 = MyModel.validate_file(save_path)
     assert m3.general.final_res == pytest.approx(20.0)
     assert m3.general.rlnMaskName == "mask8.mrc"
+
+    assert m.loop.dataframe.columns == ["rlnCoordinateX"]
