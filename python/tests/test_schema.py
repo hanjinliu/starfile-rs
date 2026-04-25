@@ -12,6 +12,7 @@ from starfile_rs.schema import (
     pandas as spd,
     polars as spl,
 )
+from starfile_rs.schema._fields import BlockField
 from .constants import test_data_directory, loop_simple
 
 class General(SingleDataModel):
@@ -64,6 +65,9 @@ def test_construction(
     assert isinstance(m.fsc.to_string(), str)
     assert isinstance(m.gen.block, SingleDataBlock)
     assert isinstance(m.fsc.block, LoopDataBlock)
+
+    assert isinstance(MyModel.gen, BlockField)
+    assert isinstance(MyModel.fsc, BlockField)
 
 @pytest.mark.parametrize(
     "loopDataModel, series",

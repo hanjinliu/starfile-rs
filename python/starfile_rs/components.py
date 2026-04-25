@@ -548,9 +548,7 @@ class LoopDataBlock(DataBlock):
                 lengths = set()
                 for val in data.values():
                     if not _utils.is_sequence(val):
-                        raise ValueError(
-                            "All values in the mapping must be sequences of equal length."
-                        )
+                        raise ValueError("All values in the mapping must be sequences.")
                     lengths.add(len(val))
                 if len(lengths) > 1:
                     raise ValueError(
