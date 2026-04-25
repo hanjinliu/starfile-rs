@@ -58,7 +58,7 @@ class LoopDataModel(LoopDataModelBase[pd.DataFrame]):
                         f"'{block.name}'."
                     )
                 else:
-                    dtype.pop(f.column_name)
+                    dtype.pop(f.column_name, None)
 
         names: list[str] = []
         usecols: list[int] = []

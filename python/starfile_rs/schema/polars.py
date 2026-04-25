@@ -1,6 +1,14 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Generic, SupportsIndex, TypeVar, overload
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Generic,
+    Iterator,
+    SupportsIndex,
+    TypeVar,
+    overload,
+)
 import polars as pl
 
 from starfile_rs.components import LoopDataBlock
@@ -23,6 +31,7 @@ if TYPE_CHECKING:
         def __getitem__(self, key: SupportsIndex) -> _T: ...
         @overload
         def __getitem__(self, key: slice) -> pl.Series[_T]: ...
+        def __iter__(self) -> Iterator[_T]: ...
 
 
 class Series(SeriesBase[_T]):
@@ -47,7 +56,7 @@ class LoopDataModel(LoopDataModelBase[pl.DataFrame]):
                         f"'{block.name}'."
                     )
                 else:
-                    schema.pop(f.column_name)
+                    schema.pop(f.column_name, None)
 
         field_names: set[str] = set()
         for f in fields:
