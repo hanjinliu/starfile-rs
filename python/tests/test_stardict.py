@@ -229,6 +229,12 @@ def test_loop_block_construction():
     with pytest.raises(TypeError):
         star_new.with_block(0)
 
+    # dict is not sequence
+    with pytest.raises(ValueError):
+        star_new.with_loop_block(
+            "loop_7", {"x": [0, 1, 2], "y": {"0": "a", "1": "b", "2": "c"}}
+        )
+
 def test_loop_block_construction_errors():
     star = empty_star()
     with pytest.raises(ValueError):  # mismatched lengths
@@ -369,6 +375,9 @@ def test_compat(path, tmpdir):
     compat.write(star, tmpdir / "out.star")
     star = compat.read(path, read_n_blocks=1)
     compat.write(star, tmpdir / "out.star")
+
+    with pytest.raises(ValueError):
+        compat.read(path, df="unsupported_df")
 
 @pytest.mark.parametrize("df", ["pandas", "polars"])
 def test_compat_cache(df):
