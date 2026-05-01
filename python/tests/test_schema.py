@@ -571,3 +571,67 @@ def test_update_and_write(tmpdir, loopDataModel, series):
     assert m3.general.rlnMaskName == "mask8.mrc"
 
     assert m.loop.dataframe.columns == ["rlnCoordinateX"]
+
+def test_inheritance_star_model():
+    """Testing that fields are inherited properly"""
+
+    class Base(StarModel):
+        gen: General = Field("general")
+
+    class Child(Base):
+        gen2: General = Field("general2")
+
+    child = Child(
+        gen=General(
+            final_res=10.0,
+            rlnMaskName="mask1.mrc",
+            randomise_from="0.0",
+        ),
+        gen2=General(
+            final_res=20.0,
+            rlnMaskName="mask2.mrc",
+            randomise_from="1.0",
+        ),
+    )
+
+    assert child.gen.final_res == pytest.approx(10.0)
+    assert child.gen.rlnMaskName == "mask1.mrc"
+    assert child.gen.randomise_from == "0.0"
+    assert child.gen2.final_res == pytest.approx(20.0)
+    assert child.gen2.rlnMaskName == "mask2.mrc"
+    assert child.gen2.randomise_from == "1.0"
+
+def test_inheritance_block_model():
+    """Testing that fields are inherited properly"""
+
+    class SingleBase(spl.SingleDataModel):
+        value: float = Field("value")
+
+    class LoopBase(spl.LoopDataModel):
+        child: spl.Series[str] = Field("col")
+
+    class Single(SingleBase):
+        value2: float = Field("value2")
+
+    class Loop(LoopBase):
+        child2: spl.Series[int] = Field("col2")
+
+    class Star(StarModel):
+        single: Single = Field("single")
+        loop: Loop = Field("loop")
+
+    s = Star(
+        single=Single(
+            value=3.14,
+            value2=2.71,
+        ),
+        loop=Loop(
+            child=["a", "b", "c"],
+            child2=[1, 2, 3],
+        ),
+    )
+
+    assert s.single.value == pytest.approx(3.14)
+    assert s.single.value2 == pytest.approx(2.71)
+    assert list(s.loop.child) == ["a", "b", "c"]
+    assert list(s.loop.child2) == [1, 2, 3]
