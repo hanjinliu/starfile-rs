@@ -43,6 +43,7 @@ class Extra(enum.Enum):
 
 ExtraType = Literal["allow", "forbid", "ignore"]
 STARFILE_CONSTRUCT_KEY = "__starfile_construct__"
+STARFILE_FIELDS = "__starfile_fields__"
 
 
 class _SchemaBase:
@@ -79,6 +80,12 @@ class StarModel(_SchemaBase):
 
     def __init_subclass__(cls, extra: ExtraType = "ignore"):
         schema_fields: dict[str, Field] = {}
+
+        # Inherit fields from parent classes
+        for base in cls.__mro__[1:]:
+            if isinstance(sf := getattr(base, STARFILE_FIELDS, None), MappingProxyType):
+                schema_fields.update(sf)
+
         for name, annot in get_type_hints(cls).items():
             if name in StarModel.__annotations__:
                 continue
@@ -284,6 +291,12 @@ class LoopDataModel(BaseBlockModel, Generic[_DF]):
 
     def __init_subclass__(cls):
         schema_fields: dict[str, Field] = {}
+
+        # Inherit fields from parent classes
+        for base in cls.__mro__[1:]:
+            if isinstance(sf := getattr(base, STARFILE_FIELDS, None), MappingProxyType):
+                schema_fields.update(sf)
+
         for name, annot in get_type_hints(cls).items():
             field = getattr(cls, name, None)
             if isinstance(field, Field):
@@ -353,6 +366,12 @@ class SingleDataModel(BaseBlockModel):
 
     def __init_subclass__(cls):
         schema_fields: dict[str, Field] = {}
+
+        # Inherit fields from parent classes
+        for base in cls.__mro__[1:]:
+            if isinstance(sf := getattr(base, STARFILE_FIELDS, None), MappingProxyType):
+                schema_fields.update(sf)
+
         for name, annot in get_type_hints(cls).items():
             field = getattr(cls, name, None)
             if isinstance(field, Field):
