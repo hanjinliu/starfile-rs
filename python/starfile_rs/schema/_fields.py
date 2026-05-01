@@ -176,7 +176,7 @@ class LoopField(_BlockComponentField):
     ) -> Any: ...
 
     def __get__(self, instance: LoopDataModel | None, owner):
-        if owner is None:
+        if instance is None:
             return self
         if self.column_name not in instance._block.columns:
             if self._default is not self._empty:

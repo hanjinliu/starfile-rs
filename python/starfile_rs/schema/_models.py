@@ -57,7 +57,7 @@ class _SchemaBase:
         return f"{type(self).__name__}({fields_str})"
 
 
-@dataclass_transform(field_specifiers=(Field,))
+@dataclass_transform(field_specifiers=(Field,), eq_default=False)
 class StarModel(_SchemaBase):
     """Base class for STAR file schema models."""
 
@@ -274,7 +274,7 @@ class AnyBlock(BaseBlockModel):
 _DF = TypeVar("_DF")
 
 
-@dataclass_transform(field_specifiers=(Field,))
+@dataclass_transform(field_specifiers=(Field,), eq_default=False)
 class LoopDataModel(BaseBlockModel, Generic[_DF]):
     """Schema model for a loop data block."""
 
@@ -345,7 +345,7 @@ class LoopDataModel(BaseBlockModel, Generic[_DF]):
         raise NotImplementedError  # pragma: no cover
 
 
-@dataclass_transform(field_specifiers=(Field,))
+@dataclass_transform(field_specifiers=(Field,), eq_default=False)
 class SingleDataModel(BaseBlockModel):
     """Schema model for a single data block."""
 

@@ -69,6 +69,28 @@ def test_construction(
     assert isinstance(MyModel.gen, BlockField)
     assert isinstance(MyModel.fsc, BlockField)
 
+def test_class_descriptor():
+    from starfile_rs.schema.polars import LoopDataModel, SingleDataModel, Series
+
+    class Loop(LoopDataModel):
+        value: Series[float] = Field("V")
+
+    class Single(SingleDataModel):
+        value: float = Field("W")
+
+    class Star(StarModel):
+        loop: Loop = Field("loop")
+        single: Single = Field("single")
+
+    assert isinstance(Star.loop, BlockField)
+    assert isinstance(Star.single, BlockField)
+    assert isinstance(Single.value, Field)
+    assert isinstance(Loop.value, Field)
+    assert Star.loop.block_name == "loop"
+    assert Star.single.block_name == "single"
+    assert Loop.value.column_name == "V"
+    assert Single.value.column_name == "W"
+
 @pytest.mark.parametrize(
     "loopDataModel, series",
     [
