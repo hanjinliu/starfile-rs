@@ -124,8 +124,13 @@ class BlockField(Field):
             raise AttributeError(
                 f"Field '{self._field_name}' is frozen and cannot be modified."
             )
-        model = instance._block_models[self.block_name]
-        block = self._validate_value(self.block_name, type(model), value)
+        if model := instance._block_models.get(self.block_name):
+            model_type = type(model)
+        else:
+            # this case is hit when the block is an optional field and the data is
+            # actually missing.
+            model_type = self.annotation
+        block = self._validate_value(self.block_name, model_type, value)
         instance._block_models[self.block_name] = block
 
     @property
