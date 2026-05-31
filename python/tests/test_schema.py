@@ -635,3 +635,28 @@ def test_inheritance_block_model():
     assert s.single.value2 == pytest.approx(2.71)
     assert list(s.loop.child) == ["a", "b", "c"]
     assert list(s.loop.child2) == [1, 2, 3]
+
+def test_setting_empty_block():
+    from starfile_rs.schema.polars import LoopDataModel, SingleDataModel, Series
+
+    class Loop(LoopDataModel):
+        value: Series[float] = Field("V")
+
+    class Single(SingleDataModel):
+        value: float = Field("W")
+
+    class Star(StarModel):
+        loop: Loop = Field("loop", default=None)
+        single: Single = Field("single", default=None)
+
+    s = Star()
+    assert s.loop is None
+    assert s.single is None
+    s.loop = {
+        "V": [1.0, 2.0, 3.0],
+    }
+    s.single = {
+        "W": 3.14,
+    }
+    assert list(s.loop.value) == [1.0, 2.0, 3.0]
+    assert s.single.value == pytest.approx(3.14)
