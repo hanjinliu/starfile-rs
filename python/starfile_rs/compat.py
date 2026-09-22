@@ -122,6 +122,7 @@ def read(
 def write(
     star_dict: Any,
     filename: "os.PathLike",
+    newline: str | None = None,
 ):
     """Write a STAR file from a StarDict-like object."""
 
@@ -130,7 +131,7 @@ def write(
         star = star_dict._star_dict
     else:
         star = as_star(star_dict)
-    star.write(filename)
+    star.write(filename, newline=newline)
 
 
 def _parse_pandas(block: LoopDataBlock, string_columns) -> "pd.DataFrame":

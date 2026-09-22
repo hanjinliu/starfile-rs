@@ -287,11 +287,21 @@ class StarDict(MutableMapping[str, "DataBlock"]):
         block = LoopDataBlock._from_any(name, data, quote_unsafe=quote_unsafe)
         return self.with_block(block, inplace=inplace)
 
-    def write(self, file: str | Path | TextIOBase) -> None:
-        """Serialize the STAR file contents to a string."""
+    def write(self, file: str | Path | TextIOBase, newline: str | None = None) -> None:
+        """Serialize the STAR file contents to a string.
+
+        Parameters
+        ----------
+        file : str | Path | TextIOBase
+            The file path or file-like object to write the STAR file contents to.
+        newline : str, optional
+            Controls how newlines are handled when writing to a file. Passed to
+            `Path.write_text` so it takes no effect for text file-like objects, for
+            which you can control via `open(file, newline=newline)`.
+        """
         if isinstance(file, (str, Path)):
             path = Path(file)
-            path.write_text(self.to_string())
+            path.write_text(self.to_string(), newline=newline)
         else:
             file.write(self.to_string())
 
