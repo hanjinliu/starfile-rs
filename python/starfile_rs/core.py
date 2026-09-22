@@ -1,5 +1,4 @@
 from pathlib import Path
-from io import TextIOBase
 from typing import (
     Any,
     Iterable,
@@ -15,6 +14,7 @@ from starfile_rs.components import DataBlock, SingleDataBlock, LoopDataBlock
 from starfile_rs import _repr, _utils
 
 if TYPE_CHECKING:
+    from io import TextIOBase
     import os
 
 
@@ -287,7 +287,9 @@ class StarDict(MutableMapping[str, "DataBlock"]):
         block = LoopDataBlock._from_any(name, data, quote_unsafe=quote_unsafe)
         return self.with_block(block, inplace=inplace)
 
-    def write(self, file: str | Path | TextIOBase, newline: str | None = None) -> None:
+    def write(
+        self, file: "str | Path | TextIOBase", newline: str | None = None
+    ) -> None:
         """Serialize the STAR file contents to a string.
 
         Parameters
