@@ -1,5 +1,5 @@
 import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 import pandas as pd
 import polars as pl
 import pytest
@@ -660,3 +660,97 @@ def test_setting_empty_block():
     }
     assert list(s.loop.value) == [1.0, 2.0, 3.0]
     assert s.single.value == pytest.approx(3.14)
+
+@pytest.mark.parametrize(
+    "loopDataModel, series",
+    [
+        (spd.LoopDataModel, spd.Series),
+        (spl.LoopDataModel, spl.Series),
+    ]
+)
+def test_optional_annotation(loopDataModel, series):
+    if TYPE_CHECKING:
+        from starfile_rs.schema.pandas import LoopDataModel, Series
+    else:
+        LoopDataModel = loopDataModel
+        Series = series
+
+    class Loop(LoopDataModel):
+        x: Series[float] = Field("X")
+        y: Series[float] | None = Field("Y", default=None)
+        z: Optional[Series[int]] = Field("Z", default=None)
+
+    class Single(SingleDataModel):
+        a: float = Field("A")
+        b: float | None = Field("B", default=None)
+        c: Optional[int] = Field("C", default=None)
+
+    class Star(StarModel):
+        single: Single | None = Field(default=None)
+        loop: Optional[Loop] = Field(default=None)
+
+    s = Star.validate_dict(
+        {
+            "single": {"A": 1.0, "B": "2.5", "C": "3"},
+            "loop": {"X": [1.0, 2.0], "Y": [3.0, 4.0], "Z": [5, 6]},
+        }
+    )
+    assert s.single.b == pytest.approx(2.5)
+    assert s.single.c == 3
+    assert list(s.loop.y) == [3.0, 4.0]
+    assert list(s.loop.z) == [5, 6]
+    assert repr(s.loop) == "Loop(<2 rows> x=Series[float], y=Series[float], z=Series[int])"
+
+    s = Star.validate_dict({"single": {"A": 1.0}, "loop": {"X": [1.0, 2.0]}})
+    assert s.single.b is None
+    assert s.single.c is None
+    assert s.loop.y is None
+    assert s.loop.z is None
+
+    s = Star.validate_dict({})
+    assert s.single is None
+    assert s.loop is None
+
+    # None given to optional fields means the value is absent
+    single = Single(a=1.0, b=None, c=None)
+    assert single.block.columns == ["A"]
+    loop = Loop(x=[1.0, 2.0], y=None)
+    assert loop.block.columns == ["X"]
+    s = Star(single=single, loop=None)
+    assert "loop" not in s.to_star_dict()
+
+    s.single.b = 4.0
+    assert s.single.b == pytest.approx(4.0)
+    s.single.b = None
+    assert s.single.b is None
+    assert s.single.block.columns == ["A"]
+    s.loop = {"X": [1.0]}
+    assert list(s.loop.x) == [1.0]
+    s.loop = None
+    assert s.loop is None
+    assert list(s.to_star_dict().keys()) == ["single"]
+
+def test_optional_annotation_required():
+    class Single(SingleDataModel):
+        a: float | None = Field("A")
+
+    class Star(StarModel):
+        single: Single | None = Field()
+
+    with pytest.raises(ValidationError):
+        Star.validate_dict({})
+    with pytest.raises(ValidationError):
+        Star(single=None)
+    with pytest.raises(ValidationError):
+        Star.validate_dict({"single": {"B": 1.0}})
+
+def test_optional_annotation_type_error():
+    class Single(SingleDataModel):
+        a: float = Field("A")
+
+    with pytest.raises(TypeError):
+        class Star(StarModel):
+            single: Single | int = Field()
+    with pytest.raises(TypeError):
+        class Star(StarModel):
+            single: int | None = Field()

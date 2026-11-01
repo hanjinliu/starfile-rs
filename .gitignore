@@ -3,6 +3,7 @@ benchmarks/
 _benchmarks/
 marimo.py
 jupyter.ipynb
+Cargo.lock
 .ipynb_checkpoints/
 _starfile_rs_rust.pdb
 

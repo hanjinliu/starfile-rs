@@ -8,6 +8,7 @@ from functools import cached_property
 from typing import (
     Any,
     Generic,
+    Iterator,
     Literal,
     Mapping,
     TYPE_CHECKING,
@@ -23,6 +24,7 @@ from starfile_rs.schema._fields import (
     SingleField,
     LoopField,
     _BlockComponentField,
+    split_optional_annotation,
 )
 from starfile_rs.schema._exception import BlockValidationError, ValidationError
 
@@ -74,7 +76,10 @@ class StarModel(_SchemaBase):
                 name: f.block_name for name, f in self.__starfile_fields__.items()
             }
             _check_unexpected_kwargs(type(self), name_map, kwargs)
-            kwargs_renamed = {name_map.get(k, k): v for k, v in kwargs.items()}
+            kwargs_renamed = {
+                name_map.get(k, k): v
+                for k, v in _drop_optional_none(self.__starfile_fields__, kwargs)
+            }
             other = type(self).validate_dict(kwargs_renamed)
             self._block_models = other._block_models
 
@@ -89,7 +94,11 @@ class StarModel(_SchemaBase):
         for name, annot in get_type_hints(cls).items():
             if name in StarModel.__annotations__:
                 continue
-            if not issubclass(annot, BaseBlockModel):
+            block_annot, _ = split_optional_annotation(annot)
+            if not (
+                isinstance(block_annot, type)
+                and issubclass(block_annot, BaseBlockModel)
+            ):
                 raise TypeError(
                     f"StarModel field '{name}' must be a subclass of SingleDataModel "
                     f"or LoopDataModel, got {annot}"
@@ -108,25 +117,18 @@ class StarModel(_SchemaBase):
         """Validate a dict of DataBlocks against this StarModel schema."""
         missing: list[str] = []
         star_input: dict[str, BaseBlockModel] = {}
-        annots = get_type_hints(cls)
         star = dict(star)
         star_keys = list(star.keys())
-        for name, field in cls.__starfile_fields__.items():
+        for field in cls.__starfile_fields__.values():
             if (block_name := field.block_name) not in star:
                 if field._default is field._empty:
                     missing.append(block_name)
                 continue
 
             # field.normalize_value will eventually call BaseBlockModel.validate_block
+            # All the annotations should have been checked in __init_subclass__
             block = star.pop(block_name)
-            annot = annots[name]
-            if issubclass(annot, SingleDataModel):
-                star_input[block_name] = field.normalize_value(block)
-            elif issubclass(annot, LoopDataModel):
-                star_input[block_name] = field.normalize_value(block)
-            else:  # pragma: no cover
-                # All the annotations should have been checked in __init_subclass__
-                raise RuntimeError("Unreachable code reached.")
+            star_input[block_name] = field.normalize_value(block)
         if missing:
             _miss = ", ".join(repr(m) for m in missing)
             raise ValidationError(
@@ -216,7 +218,10 @@ class BaseBlockModel(_SchemaBase):
                 name: f.column_name for name, f in self.__starfile_fields__.items()
             }
             _check_unexpected_kwargs(type(self), name_map, kwargs)
-            kwargs_renamed = {name_map.get(k, k): v for k, v in kwargs.items()}
+            kwargs_renamed = {
+                name_map.get(k, k): v
+                for k, v in _drop_optional_none(self.__starfile_fields__, kwargs)
+            }
             self._block = type(self)._parse_block("", kwargs_renamed)
 
     @classmethod
@@ -300,12 +305,12 @@ class LoopDataModel(BaseBlockModel, Generic[_DF]):
         for name, annot in get_type_hints(cls).items():
             field = getattr(cls, name, None)
             if isinstance(field, Field):
-                if get_origin(annot) is None:
+                new_field = LoopField._from_field(field, annot)
+                if get_origin(new_field.annotation) is None:
                     raise TypeError(
                         f"LoopDataModel field '{name}' must be annotated with "
                         f"{cls._series_class.__name__}[T], got {annot}"
                     )
-                new_field = LoopField._from_field(field, annot)
                 schema_fields[name] = new_field
                 setattr(cls, name, new_field)
 
@@ -407,3 +412,14 @@ def _check_unexpected_kwargs(
     if any(k not in allowed for k in kwargs):
         unexpected = ", ".join(repr(k) for k in kwargs if k not in allowed)
         raise TypeError(f"{cls.__name__} got unexpected fields: {unexpected}")
+
+
+def _drop_optional_none(
+    fields: Mapping[str, Field],
+    kwargs: dict[str, Any],
+) -> Iterator[tuple[str, Any]]:
+    """Iterate over kwargs, skipping None values given to `X | None` fields."""
+    for k, v in kwargs.items():
+        if v is None and fields[k]._optional:
+            continue
+        yield k, v
