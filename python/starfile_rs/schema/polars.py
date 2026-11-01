@@ -12,7 +12,7 @@ from typing import (
 import polars as pl
 
 from starfile_rs.components import LoopDataBlock
-from starfile_rs.schema._fields import LoopField, Field
+from starfile_rs.schema._fields import Field
 from starfile_rs.schema._models import (
     SingleDataModel,
     LoopDataModel as LoopDataModelBase,
@@ -44,36 +44,21 @@ class LoopDataModel(LoopDataModelBase[pl.DataFrame]):
     _dataframe_class = pl.DataFrame
 
     @classmethod
-    def _get_dataframe(
-        cls, block: LoopDataBlock, fields: list[LoopField]
-    ) -> pl.DataFrame:
+    def _get_dataframe(cls, block, fields):
         schema = {col: pl.String for col in block.columns}
+        field_names = set()
         for f in fields:
             if f.column_name not in block.columns:
                 if f._default is f._empty:
                     raise ValueError(
-                        f"Required column '{f.column_name}' not found in data block "
-                        f"'{block.name}'."
+                        f"Required column '{f.column_name}' not found in data block '{block.name}'."
                     )
-                else:
-                    schema.pop(f.column_name, None)
-
-        field_names: set[str] = set()
-        for f in fields:
+                continue  # optional & absent: never put it into the schema
             schema[f.column_name] = _type_to_schema(f._get_annotation_arg())
             field_names.add(f.column_name)
-
-        new_columns: list[str] = []
-        columns: list[int] = []
-        for ith, name in enumerate(block.columns):
-            if name in field_names:
-                columns.append(ith)
-                new_columns.append(name)
+        columns = [i for i, name in enumerate(block.columns) if name in field_names]
         return block.trust_loop()._to_polars_impl(
-            columns=columns,
-            new_columns=new_columns,
-            schema=schema,
-            infer_schema=False,
+            columns=columns, schema=schema, infer_schema=False
         )
 
     @classmethod
