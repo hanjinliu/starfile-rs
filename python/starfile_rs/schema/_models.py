@@ -188,9 +188,9 @@ class StarModel(_SchemaBase):
         star_dict = read_star_text(text)
         return cls.validate_dict(star_dict)
 
-    def write(self, path: str | Path | TextIOBase) -> None:
+    def write(self, path: str | Path | TextIOBase, newline: str | None = None) -> None:
         """Write the StarModel to a STAR file."""
-        return self.to_star_dict().write(path)
+        return self.to_star_dict().write(path, newline=newline)
 
     def to_star_dict(self) -> StarDict:
         """Convert the StarModel to a StarDict."""
