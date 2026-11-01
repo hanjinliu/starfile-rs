@@ -1,5 +1,15 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Any, Literal, TypeVar, get_args, get_origin, overload
+from types import NoneType, UnionType
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Literal,
+    TypeVar,
+    Union,
+    get_args,
+    get_origin,
+    overload,
+)
 
 from starfile_rs import DataBlock, SingleDataBlock
 
@@ -43,6 +53,7 @@ class Field:
         self._star_name = name
         self._field_name: str | None = None
         self._annotation: Any | None = None
+        self._optional = False
         self._default = default
         self._frozen = frozen
 
@@ -68,7 +79,8 @@ class Field:
         self = cls(field._star_name, frozen=field._frozen, default=field._default)
         if annotation is None:
             raise ValueError(f"Field {field._field_name!r} requires a type annotation")
-        self._annotation = annotation
+        # `X | None` is stored as `X`, and None means the block/column is absent.
+        self._annotation, self._optional = split_optional_annotation(annotation)
         self._field_name = field._field_name
         return self
 
@@ -124,6 +136,9 @@ class BlockField(Field):
             raise AttributeError(
                 f"Field '{self._field_name}' is frozen and cannot be modified."
             )
+        if value is None and self._optional:
+            instance._block_models.pop(self.block_name, None)
+            return
         if model := instance._block_models.get(self.block_name):
             model_type = type(model)
         else:
@@ -258,14 +273,27 @@ class SingleField(_BlockComponentField):
             raise AttributeError(
                 f"Field '{self._field_name}' is frozen and cannot be modified."
             )
-        column_value = self._validate_value(self.column_name, self.annotation, value)
         block_old = instance._block
         d = block_old.trust_single().to_dict()
-        d[self.column_name] = column_value
+        if value is None and self._optional:
+            d.pop(self.column_name, None)
+        else:
+            d[self.column_name] = self._validate_value(
+                self.column_name, self.annotation, value
+            )
         instance._block = SingleDataBlock.from_iterable(block_old.name, d)
 
 
 _T = TypeVar("_T")
+
+
+def split_optional_annotation(annotation: Any) -> tuple[Any, bool]:
+    """Split `X | None` (or `Optional[X]`) into (X, True), otherwise (annotation, False)."""
+    if get_origin(annotation) in (Union, UnionType):
+        args = get_args(annotation)
+        if len(args) == 2 and NoneType in args:
+            return args[0] if args[1] is NoneType else args[1], True
+    return annotation, False
 
 
 def split_series_annotation(
