@@ -9,6 +9,7 @@ from typing import (
     get_args,
     get_origin,
     overload,
+    Callable,
 )
 
 from starfile_rs import DataBlock, SingleDataBlock
@@ -48,6 +49,7 @@ class Field:
         name: str | None = None,
         *,
         default: Any = _empty,
+        default_factory: Callable[[], Any] | None = None,
         frozen: bool = False,
     ):
         self._star_name = name
@@ -55,6 +57,7 @@ class Field:
         self._annotation: Any | None = None
         self._optional = False
         self._default = default
+        self._default_factory = default_factory
         self._frozen = frozen
 
     def __repr__(self) -> str:
@@ -76,7 +79,12 @@ class Field:
         field: Field,
         annotation,
     ) -> Self:
-        self = cls(field._star_name, frozen=field._frozen, default=field._default)
+        self = cls(
+            field._star_name,
+            frozen=field._frozen,
+            default=field._default,
+            default_factory=field._default_factory,
+        )
         if annotation is None:
             raise ValueError(f"Field {field._field_name!r} requires a type annotation")
         # `X | None` is stored as `X`, and None means the block/column is absent.
@@ -96,6 +104,9 @@ class Field:
         self._field_name = name
         if self._star_name is None:
             self._star_name = name
+
+    def _has_default(self) -> bool:
+        return self._default is not Field._empty or self._default_factory is not None
 
 
 class BlockField(Field):
@@ -123,6 +134,12 @@ class BlockField(Field):
             return instance._block_models[self.block_name]
         if self._default is not self._empty:
             return self._default
+        if self._default_factory is not None:
+            value = self._default_factory()
+            instance._block_models[self.block_name] = self._validate_by_instance(
+                instance, value
+            )
+            return value
         raise AttributeError(
             f"Block '{self.block_name}' has not been set in instance of {owner.__name__}"
         )
@@ -139,14 +156,9 @@ class BlockField(Field):
         if value is None and self._optional:
             instance._block_models.pop(self.block_name, None)
             return
-        if model := instance._block_models.get(self.block_name):
-            model_type = type(model)
-        else:
-            # this case is hit when the block is an optional field and the data is
-            # actually missing.
-            model_type = self.annotation
-        block = self._validate_value(self.block_name, model_type, value)
-        instance._block_models[self.block_name] = block
+        instance._block_models[self.block_name] = self._validate_by_instance(
+            instance, value
+        )
 
     @property
     def block_name(self) -> str:
@@ -165,6 +177,15 @@ class BlockField(Field):
             )
         block = annotation._parse_block(name, value)
         return annotation.validate_block(block)
+
+    def _validate_by_instance(self, instance: StarModel, value):
+        if model := instance._block_models.get(self.block_name):
+            model_type = type(model)
+        else:
+            # this case is hit when the block is an optional field and the data is
+            # actually missing.
+            model_type = self.annotation
+        return self._validate_value(self.block_name, model_type, value)
 
 
 class _BlockComponentField(Field):
@@ -259,6 +280,10 @@ class SingleField(_BlockComponentField):
         if self.column_name not in block.columns:
             if self._default is not self._empty:
                 return self._default
+            if self._default_factory is not None:
+                value = self._default_factory()
+                self.__set__(instance, value)
+                return value
             raise AttributeError(
                 f"Column '{self.column_name}' has not been set in instance of {owner.__name__}"
             )

@@ -754,3 +754,28 @@ def test_optional_annotation_type_error():
     with pytest.raises(TypeError):
         class Star(StarModel):
             single: int | None = Field()
+
+def test_default_factory():
+    class Single(SingleDataModel):
+        a: float = Field("A", default_factory=lambda: 1.0)
+
+    class Star(StarModel):
+        single: Single | None = Field(default=None)
+
+    s = Star.validate_dict({"single": {}})
+    assert s.single.a == pytest.approx(1.0)
+    s = Star.validate_dict({"single": {"A": 2.0}})
+    assert s.single.a == pytest.approx(2.0)
+
+def test_block_default_factory():
+    from starfile_rs.schema.polars import LoopDataModel, Series
+
+    class Loop(LoopDataModel):
+        x: Series[int] = Field("X")
+
+    class Star(StarModel):
+        loop: Loop = Field(default_factory=Loop.empty)
+
+    s = Star.validate_dict({})
+    assert s.loop.x.to_list() == []
+    # assert "X" not in s.to_string()
