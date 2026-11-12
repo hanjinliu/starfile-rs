@@ -121,7 +121,7 @@ class StarModel(_SchemaBase):
         star_keys = list(star.keys())
         for field in cls.__starfile_fields__.values():
             if (block_name := field.block_name) not in star:
-                if field._default is field._empty:
+                if not field._has_default():
                     missing.append(block_name)
                 continue
 
@@ -174,7 +174,7 @@ class StarModel(_SchemaBase):
         # Check for missing required fields here. Although validate_dict will also
         # do this, user can be notified with what blocks are actually in the file.
         for field in cls.__starfile_fields__.values():
-            if field._default is not Field._empty:
+            if field._has_default():
                 required.discard(field.block_name)
         if required:
             _miss = ", ".join(repr(m) for m in required)
@@ -232,7 +232,7 @@ class BaseBlockModel(_SchemaBase):
         fields = list(cls.__starfile_fields__.values())
         missing: list[str] = []
         for f in fields:
-            if f.column_name not in block.columns and f._default is Field._empty:
+            if f.column_name not in block.columns and not f._has_default():
                 missing.append(f.column_name)
         if missing:
             # If this model has no attributes, validation error will not be raised here.
@@ -336,6 +336,13 @@ class LoopDataModel(BaseBlockModel, Generic[_DF]):
     def block(self) -> LoopDataBlock:
         """Return the underlying LoopDataBlock."""
         return self._block
+
+    @classmethod
+    def empty(cls, name: str = "") -> LoopDataModel:
+        """Return an empty instance of the LoopDataModel."""
+        obj = {v.column_name: [] for v in cls.__starfile_fields__.values()}
+        block = cls._parse_object(name, obj)
+        return cls.validate_block(block)
 
     @classmethod
     def _parse_block(cls, name: str, value: Any) -> LoopDataBlock:

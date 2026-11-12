@@ -310,6 +310,9 @@ class StarDict(MutableMapping[str, "DataBlock"]):
         strings: list[str] = []
         for block in self._blocks.values():
             strings.append("\n")
+            # TODO: should we skip empty loop blocks?
+            # if isinstance(block, LoopDataBlock) and block.shape[0] == 0:
+            #     continue
             strings.append(block.to_string(block_title=True))
             strings.append("\n")
         if comment:
