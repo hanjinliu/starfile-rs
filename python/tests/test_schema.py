@@ -779,3 +779,20 @@ def test_block_default_factory():
     s = Star.validate_dict({})
     assert s.loop.x.to_list() == []
     # assert "X" not in s.to_string()
+
+def test_setting_loop_block_that_is_empty_now():
+    import polars as pl
+    from starfile_rs.schema.polars import LoopDataModel, Series
+
+    class Loop(LoopDataModel):
+        x: Series[int] = Field("X")
+        y: Series[int] = Field("Y")
+
+    class Star(StarModel):
+        loop: Loop = Field(default_factory=Loop.empty)
+
+    s = Star.validate_dict({})
+    assert s.loop.x.to_list() == []
+    s.loop = pl.DataFrame({"X": [1, 2, 3], "Y": [4, 5, 6]})
+    assert s.loop.x.to_list() == [1, 2, 3]
+    assert s.loop.y.to_list() == [4, 5, 6]

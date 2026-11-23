@@ -249,6 +249,8 @@ fn parse_loop_block<R: io::BufRead>(
                 let buf_trim = buf.trim_ascii_end();
                 if buf_trim.is_empty() {
                     continue; // Skip empty lines
+                } else if buf_trim.starts_with(b"#") {
+                    continue; // Skip comments
                 } else if buf_trim.starts_with(b"_") {
                     let buf_vec = remove_comment(&buf_trim);
                     // SAFETY: Column names should be ASCII-compatible
@@ -285,7 +287,9 @@ fn parse_loop_block<R: io::BufRead>(
                 let buf_trim = buf.trim_ascii_end();
                 if buf_trim.is_empty() {
                     break Vec::new(); // End of block
-                } else if buf.starts_with(b"data_") {
+                } else if buf_trim.starts_with(b"#") {
+                    continue; // Skip comments
+                } else if buf_trim.starts_with(b"data_") {
                     break Vec::new(); // Start of next block
                 } else {
                     last_line.extend(buf_trim);
