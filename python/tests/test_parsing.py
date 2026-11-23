@@ -373,3 +373,26 @@ def test_simple_block_with_newlines():
     star = read_star_text(star_text)
     assert list(star.keys()) == ['A', 'B']
     assert star["A"].trust_single().to_dict() == {'a': 1, 'b': 2, 'c': 'text'}
+
+def test_comment_out():
+    star_text = [
+        "data_1",
+        "#",
+        "loop_",
+        "_atom_site.group_PDB",
+        "_atom_site.id",
+        "ATOM 1",
+        "ATOM 2",
+        "ATOM 3",
+        "#",
+        "",
+    ]
+    star_text = "\n".join(star_text)
+
+    star = read_star_text(star_text)
+    assert list(star.keys()) == ['1']
+    assert star["1"].columns == ['atom_site.group_PDB', 'atom_site.id']
+    assert star["1"].trust_loop().shape == (3, 2)
+
+    assert star["1"].to_pandas().shape == (3, 2)
+    assert star["1"].to_polars().shape == (3, 2)
